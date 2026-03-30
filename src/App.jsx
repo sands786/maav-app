@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useId } from "react";
 import * as THREE from "three";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Zap, Cpu, Fingerprint, Pencil, Settings2, Sparkles } from 'lucide-react';
-import { useReducedMotion } from 'framer-motion';
+import { LayoutDashboard, Vault, Bot, BarChart2, Settings } from 'lucide-react';
 
 // ── Fonts & Global Styles ──────────────────────────────────────────────────
 const FontLink = () => (
@@ -41,8 +40,6 @@ const FontLink = () => (
     .fade-up-3 { animation: fadeUp 0.45s 0.16s ease both; }
     .fade-up-4 { animation: fadeUp 0.45s 0.24s ease both; }
     .auth-in   { animation: authIn 0.65s cubic-bezier(0.16,1,0.3,1) both; }
-    .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
-    @media (max-width: 768px) { .feature-grid { grid-template-columns: 1fr; } }
   `}</style>
 );
 
@@ -217,121 +214,27 @@ const GlobalOverlay = () => (
   }} />
 );
 
-// ── Feature Cards ──────────────────────────────────────────────────────────
-function GridPattern({ width, height, x, y, squares, className, ...props }) {
+// ── Grid Pattern (for Sidebar) ─────────────────────────────────────────────
+function GridPattern({ width, height, x, y, squares, style, ...props }) {
   const patternId = useId();
   return (
-    <svg aria-hidden="true" className={className} {...props}>
+    <svg aria-hidden="true" style={style} {...props}>
       <defs>
         <pattern id={patternId} width={width} height={height} patternUnits="userSpaceOnUse" x={x} y={y}>
-          <path d={`M.5 ${height}V.5H${width}`} fill="none" />
+          <path d={`M.5 ${height}V.5H${width}`} fill="none" stroke="rgba(139,92,246,0.15)" strokeWidth="0.5"/>
         </pattern>
       </defs>
-      <rect width="100%" height="100%" strokeWidth={0} fill={`url(#${patternId})`} />
+      <rect width="100%" height="100%" fill={`url(#${patternId})`} />
       {squares && (
         <svg x={x} y={y} style={{overflow:"visible"}}>
           {squares.map(([sx, sy], index) => (
-            <rect strokeWidth="0" key={index} width={width + 1} height={height + 1} x={sx * width} y={sy * height} />
+            <rect key={index} strokeWidth="0" width={width+1} height={height+1} x={sx*width} y={sy*height} fill="rgba(139,92,246,0.08)"/>
           ))}
         </svg>
       )}
     </svg>
   );
 }
-
-function genRandomPattern(length = 5) {
-  return Array.from({ length }, () => [
-    Math.floor(Math.random() * 4) + 7,
-    Math.floor(Math.random() * 6) + 1,
-  ]);
-}
-
-function FeatureCard({ feature }) {
-  const p = genRandomPattern();
-  const Icon = feature.icon;
-  return (
-    <div style={{
-      position: "relative", overflow: "hidden", padding: 24,
-      transition: "background 0.3s",
-      borderRight: "1px dashed rgba(100,116,139,0.3)",
-      borderBottom: "1px dashed rgba(100,116,139,0.3)",
-    }}
-      onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"}
-      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-    >
-      <div style={{
-        pointerEvents: "none", position: "absolute", top: 0, left: "50%",
-        marginLeft: -80, marginTop: -8, height: "100%", width: "100%",
-      }}>
-        <div style={{
-          position: "absolute", inset: 0,
-          background: "linear-gradient(to right, rgba(255,255,255,0.03), rgba(255,255,255,0.01))",
-        }}>
-          <GridPattern
-            width={20} height={20} x="-12" y="4" squares={p}
-            style={{
-              fill: "rgba(255,255,255,0.04)",
-              stroke: "rgba(255,255,255,0.15)",
-              position: "absolute", inset: 0, height: "100%", width: "100%",
-              mixBlendMode: "overlay",
-            }}
-          />
-        </div>
-      </div>
-      <div style={{
-        position: "relative", zIndex: 10, marginBottom: 16, display: "inline-flex",
-        borderRadius: 8, padding: 10,
-        background: "linear-gradient(135deg,rgba(139,92,246,0.2),rgba(59,130,246,0.1))",
-        boxShadow: "0 0 0 1px rgba(255,255,255,0.1)",
-      }}>
-        <Icon style={{color:"#a78bfa", width:20, height:20}} strokeWidth={1.5} />
-      </div>
-      <h3 style={{
-        position: "relative", zIndex: 10, marginTop: 24, fontSize: 14,
-        fontWeight: 600, letterSpacing: "-0.01em", color: "#f1f5f9",
-      }}>{feature.title}</h3>
-      <p style={{
-        position: "relative", zIndex: 10, marginTop: 8, fontSize: 12,
-        fontWeight: 300, lineHeight: 1.7, color: "#94a3b8",
-      }}>{feature.description}</p>
-    </div>
-  );
-}
-
-const FeatureGridDemo = () => {
-  const features = [
-    { title: 'Lightning Fast', icon: Zap, description: 'Optimized performance with edge caching and minimal bundle size for instant load times.' },
-    { title: 'Powerful Compute', icon: Cpu, description: 'Distributed computing infrastructure that scales automatically with your workload demands.' },
-    { title: 'Enterprise Security', icon: Fingerprint, description: 'End-to-end encryption, SOC2 compliance, and advanced threat detection built-in.' },
-    { title: 'Deep Customization', icon: Pencil, description: 'Fully customizable themes, components, and workflows to match your brand identity.' },
-    { title: 'Granular Control', icon: Settings2, description: 'Fine-tuned access controls, audit logs, and resource management dashboards.' },
-    { title: 'AI-Native', icon: Sparkles, description: 'Built-in AI assistants, smart autocomplete, and intelligent automation capabilities.' },
-  ];
-
-  return (
-    <section style={{paddingTop: 48, paddingBottom: 48}}>
-      <div style={{maxWidth: 960, margin: "0 auto", padding: "0 16px"}}>
-        <div style={{textAlign: "center", marginBottom: 32, maxWidth: 600, margin: "0 auto 32px"}}>
-          <h2 style={{fontSize: 36, fontWeight: 700, letterSpacing: "-0.02em", color: "#f1f5f9"}}>
-            Power. Speed. Control.
-          </h2>
-          <p style={{color: "#94a3b8", marginTop: 12, fontSize: 14, letterSpacing: "0.03em"}}>
-            Everything you need to build fast, secure, and scalable applications.
-          </p>
-        </div>
-        <div className="feature-grid" style={{
-          border: "1px dashed rgba(100,116,139,0.3)",
-          borderRadius: 12, overflow: "hidden",
-          background: "rgba(15,23,42,0.3)",
-        }}>
-          {features.map((feature, i) => (
-            <FeatureCard key={i} feature={feature} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-};
 
 // ── UI Primitives ─────────────────────────────────────────────────────────
 const Badge = ({label, color}) => (
@@ -342,39 +245,87 @@ const Badge = ({label, color}) => (
   }}>{label}</span>
 );
 
-const StatCard = ({label, value, sub, accent, delay=0}) => (
-  <div className="fade-up" style={{
-    animationDelay: `${delay}s`,
-    background: "linear-gradient(135deg,rgba(16,24,48,0.90),rgba(10,16,32,0.85))",
-    backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-    border: `1px solid ${accent}30`, borderRadius: 12, padding: "20px 24px",
-    flex: 1, minWidth: 160, position: "relative", overflow: "hidden",
-    boxShadow: "0 4px 24px rgba(0,0,0,0.3)"
-  }}>
-    <div style={{
-      position: "absolute", top: 0, left: 0, right: 0, height: 2,
-      background: `linear-gradient(90deg,${accent}00,${accent},${accent}00)`
-    }} />
-    <div style={{
-      fontSize: 11, color: "var(--text2)", fontFamily: "var(--mono)",
-      textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, fontWeight: 500
-    }}>{label}</div>
-    <div style={{fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text0)"}}>{value}</div>
-    {sub && <div style={{fontSize: 12, color: accent, marginTop: 4, fontWeight: 500}}>{sub}</div>}
-  </div>
-);
+const StatCard = ({label, value, sub, accent, delay=0}) => {
+  const id = useId();
+  return (
+    <div className="fade-up" style={{
+      animationDelay: `${delay}s`,
+      background: `linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%)`,
+      backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)",
+      border: `1px solid rgba(255,255,255,0.10)`,
+      borderTop: `1px solid rgba(255,255,255,0.18)`,
+      borderLeft: `1px solid rgba(255,255,255,0.14)`,
+      borderRadius: 16, padding: "20px 24px",
+      flex: 1, minWidth: 160, position: "relative", overflow: "hidden",
+      boxShadow: `0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05) inset, 0 0 20px ${accent}15`
+    }}>
+      {/* Grid pattern */}
+      <svg aria-hidden="true" style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.3,pointerEvents:"none"}}>
+        <defs>
+          <pattern id={id} width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M.5 20V.5H20" fill="none" stroke="rgba(139,92,246,0.25)" strokeWidth="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill={`url(#${id})`}/>
+      </svg>
+      {/* Top accent line */}
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0, height: 2,
+        background: `linear-gradient(90deg,${accent}00,${accent},${accent}00)`
+      }} />
+      {/* Glass shine */}
+      <div style={{
+        position:"absolute", top:0, left:0, right:0, height:"50%",
+        background:"linear-gradient(180deg,rgba(255,255,255,0.06) 0%,rgba(255,255,255,0) 100%)",
+        borderRadius:"16px 16px 0 0", pointerEvents:"none"
+      }}/>
+      <div style={{position:"relative",zIndex:1}}>
+        <div style={{
+          fontSize: 11, color: "var(--text2)", fontFamily: "var(--mono)",
+          textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, fontWeight: 500
+        }}>{label}</div>
+        <div style={{fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text0)"}}>{value}</div>
+        {sub && <div style={{fontSize: 12, color: accent, marginTop: 4, fontWeight: 500}}>{sub}</div>}
+      </div>
+    </div>
+  );
+};
 
-const Card = ({children, style, glow, className}) => (
-  <div className={className} style={{
-    background: "linear-gradient(145deg,rgba(16,24,48,0.85),rgba(8,14,28,0.90))",
-    backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
-    border: "1px solid rgba(99,120,200,0.12)", borderRadius: 14, padding: 24,
-    boxShadow: glow
-      ? "0 0 0 1px rgba(139,92,246,0.15) inset,0 8px 32px rgba(0,0,0,0.4),var(--glow-purple)"
-      : "0 4px 24px rgba(0,0,0,0.3),0 0 0 1px rgba(255,255,255,0.03) inset",
-    transition: "all 0.3s ease", ...style
-  }}>{children}</div>
-);
+const Card = ({children, style, glow, className}) => {
+  const id = useId();
+  return (
+    <div className={className} style={{
+      background: "linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)",
+      backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)",
+      border: "1px solid rgba(255,255,255,0.10)",
+      borderTop: "1px solid rgba(255,255,255,0.16)",
+      borderLeft: "1px solid rgba(255,255,255,0.12)",
+      borderRadius: 16, padding: 24,
+      position: "relative", overflow: "hidden",
+      boxShadow: glow
+        ? "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,92,246,0.2) inset, 0 0 40px rgba(139,92,246,0.15)"
+        : "0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05) inset",
+      transition: "all 0.3s ease", ...style
+    }}>
+      {/* Grid pattern */}
+      <svg aria-hidden="true" style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.3,pointerEvents:"none"}}>
+        <defs>
+          <pattern id={id} width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M.5 20V.5H20" fill="none" stroke="rgba(139,92,246,0.25)" strokeWidth="0.5"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill={`url(#${id})`}/>
+      </svg>
+      {/* Glass shine overlay */}
+      <div style={{
+        position:"absolute", top:0, left:0, right:0, height:"40%",
+        background:"linear-gradient(180deg,rgba(255,255,255,0.05) 0%,rgba(255,255,255,0) 100%)",
+        borderRadius:"16px 16px 0 0", pointerEvents:"none"
+      }}/>
+      <div style={{position:"relative",zIndex:1}}>{children}</div>
+    </div>
+  );
+};
 
 const Btn = ({children, onClick, variant="primary", small, disabled, style: sx}) => {
   const base = {
@@ -459,42 +410,95 @@ const Ticker = () => (
 );
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
-const NAV = ["Dashboard", "Vaults", "AI Agent", "Analytics", "Settings"];
-const NAV_ICONS = {Dashboard:"◈", Vaults:"⬡", "AI Agent":"◎", Analytics:"◉", Settings:"⚙"};
+const NAV = [
+  { label: "Dashboard", icon: LayoutDashboard },
+  { label: "Vaults",    icon: Vault },
+  { label: "AI Agent",  icon: Bot },
+  { label: "Analytics", icon: BarChart2 },
+  { label: "Settings",  icon: Settings },
+];
+
+const NAV_SQUARES = [
+  [[1,1],[2,3],[3,2]], [[2,1],[1,3],[3,1]], [[1,2],[3,3],[2,2]],
+  [[3,1],[1,1],[2,3]], [[2,2],[1,3],[3,2]],
+];
 
 const Sidebar = ({page, setPage, user}) => (
   <aside style={{
-    width: 240, background: "linear-gradient(180deg,rgba(4,8,16,0.95),rgba(2,4,10,0.98))",
+    width: 240,
+    background: "linear-gradient(180deg,rgba(4,8,16,0.95),rgba(2,4,10,0.98))",
     backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)",
-    borderRight: "1px solid rgba(99,120,200,0.1)", display: "flex",
-    flexDirection: "column", height: "100vh", position: "sticky",
-    top: 0, flexShrink: 0, zIndex: 20
+    borderRight: "1px solid rgba(99,120,200,0.1)",
+    display: "flex", flexDirection: "column",
+    height: "100vh", position: "sticky", top: 0, flexShrink: 0, zIndex: 20
   }}>
+    {/* Logo */}
     <div style={{padding: "32px 24px 24px", borderBottom: "1px solid rgba(99,120,200,0.1)"}}>
       <div style={{fontFamily:"var(--mono)",fontWeight:700,fontSize:20,letterSpacing:"-0.02em",textShadow:"0 0 30px rgba(139,92,246,0.6)"}}>
         <span style={{color:"var(--purple)"}}>M</span>AAV
       </div>
       <div style={{fontSize:10,color:"var(--text2)",fontFamily:"var(--mono)",marginTop:4,letterSpacing:"0.15em",fontWeight:500}}>MANTLE AI VAULT</div>
     </div>
-    <nav style={{padding: "20px 14px", flex: 1}}>
-      {NAV.map(n => (
-        <button key={n} onClick={() => setPage(n)} style={{
-          display: "flex", alignItems: "center", gap: 12, width: "100%",
-          padding: "12px 14px", borderRadius: 10, border: "none",
-          background: page === n ? "linear-gradient(90deg,rgba(139,92,246,0.15),rgba(59,130,246,0.05))" : "transparent",
-          color: page === n ? "#8b5cf6" : "var(--text1)",
-          fontSize: 13, fontWeight: page === n ? 600 : 500,
-          cursor: "pointer", marginBottom: 4, transition: "all 0.2s",
-          textAlign: "left",
-          boxShadow: page === n ? "inset 0 0 0 1px rgba(139,92,246,0.2),0 2px 8px rgba(139,92,246,0.1)" : "none",
-          fontFamily: "var(--sans)"
-        }}>
-          <span style={{fontSize:15, opacity: page === n ? 1 : 0.7}}>{NAV_ICONS[n]}</span>
-          {n}
-          {page === n && <span style={{marginLeft:"auto",width:4,height:4,borderRadius:"50%",background:"#8b5cf6",boxShadow:"0 0 8px #8b5cf6"}} />}
-        </button>
-      ))}
+
+    {/* Nav */}
+    <nav style={{padding: "16px 12px", flex: 1}}>
+      {NAV.map(({label, icon: Icon}, idx) => {
+        const active = page === label;
+        return (
+          <button key={label} onClick={() => setPage(label)} style={{
+            position: "relative", overflow: "hidden",
+            display: "flex", alignItems: "center", gap: 12,
+            width: "100%", padding: "11px 14px", borderRadius: 10,
+            border: active ? "1px solid rgba(139,92,246,0.25)" : "1px solid transparent",
+            background: active ? "linear-gradient(90deg,rgba(139,92,246,0.12),rgba(59,130,246,0.06))" : "transparent",
+            color: active ? "#a78bfa" : "var(--text1)",
+            fontSize: 13, fontWeight: active ? 600 : 500,
+            cursor: "pointer", marginBottom: 4, transition: "all 0.2s",
+            textAlign: "left", fontFamily: "var(--sans)",
+          }}
+            onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
+            onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+          >
+            {/* Grid pattern background */}
+            <GridPattern
+              width={16} height={16} x="0" y="0"
+              squares={NAV_SQUARES[idx]}
+              style={{
+                position: "absolute", inset: 0, width: "100%", height: "100%",
+                opacity: active ? 1 : 0, transition: "opacity 0.3s",
+              }}
+            />
+
+            {/* Icon box */}
+            <div style={{
+              position: "relative", zIndex: 1,
+              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: active
+                ? "linear-gradient(135deg,rgba(139,92,246,0.35),rgba(59,130,246,0.2))"
+                : "rgba(255,255,255,0.04)",
+              border: active ? "1px solid rgba(139,92,246,0.4)" : "1px solid rgba(255,255,255,0.06)",
+              boxShadow: active ? "0 0 12px rgba(139,92,246,0.3)" : "none",
+              transition: "all 0.2s",
+            }}>
+              <Icon size={15} strokeWidth={active ? 2 : 1.5} style={{color: active ? "#a78bfa" : "var(--text2)"}}/>
+            </div>
+
+            <span style={{position:"relative",zIndex:1}}>{label}</span>
+
+            {active && (
+              <span style={{
+                marginLeft: "auto", position: "relative", zIndex: 1,
+                width: 5, height: 5, borderRadius: "50%",
+                background: "#8b5cf6", boxShadow: "0 0 8px #8b5cf6"
+              }}/>
+            )}
+          </button>
+        );
+      })}
     </nav>
+
+    {/* User */}
     <div style={{padding: "20px 24px", borderTop: "1px solid rgba(99,120,200,0.1)"}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div style={{
@@ -537,11 +541,26 @@ const AuthScreen = ({onLogin}) => {
 
       <div className="auth-in" style={{
         width:"100%",maxWidth:440,
-        background:"linear-gradient(145deg,rgba(16,24,48,0.90),rgba(8,14,28,0.95))",
-        backdropFilter:"blur(40px)",WebkitBackdropFilter:"blur(40px)",
-        border:"1px solid rgba(139,92,246,0.25)",borderRadius:20,padding:"32px 36px",
-        boxShadow:"0 0 0 1px rgba(255,255,255,0.05) inset,0 40px 100px rgba(0,0,0,0.7),0 0 60px rgba(139,92,246,0.15)"
+        background:"linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)",
+        backdropFilter:"blur(48px)",WebkitBackdropFilter:"blur(48px)",
+        border:"1px solid rgba(255,255,255,0.12)",
+        borderTop:"1px solid rgba(255,255,255,0.20)",
+        borderLeft:"1px solid rgba(255,255,255,0.15)",
+        borderRadius:24,padding:"36px 40px",position:"relative",overflow:"hidden",
+        boxShadow:"0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06) inset, 0 0 60px rgba(139,92,246,0.12)"
       }}>
+        {/* Grid pattern */}
+        <svg aria-hidden="true" style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.25,pointerEvents:"none"}}>
+          <defs>
+            <pattern id="auth-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M.5 20V.5H20" fill="none" stroke="rgba(139,92,246,0.3)" strokeWidth="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#auth-grid)"/>
+        </svg>
+        {/* Glass shine */}
+        <div style={{position:"absolute",top:0,left:0,right:0,height:"45%",background:"linear-gradient(180deg,rgba(255,255,255,0.07) 0%,rgba(255,255,255,0) 100%)",borderRadius:"24px 24px 0 0",pointerEvents:"none"}}/>
+        <div style={{position:"relative",zIndex:1}}>
         <div style={{display:"flex",gap:0,marginBottom:28,background:"rgba(255,255,255,0.03)",borderRadius:12,padding:4}}>
           {["login","register"].map(m => (
             <button key={m} onClick={() => setMode(m)} style={{
@@ -578,7 +597,8 @@ const AuthScreen = ({onLogin}) => {
           }
         </button>
         <div style={{marginTop:20,textAlign:"center",fontSize:12,color:"var(--text2)"}}>Demo credentials pre-filled — just hit sign in</div>
-      </div>
+        </div>{/* end z-index wrapper */}
+      </div>{/* end auth box */}
 
       <div className="auth-in" style={{marginTop:28,display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
         {Object.entries(PROTOCOLS).map(([name, p]) => (
@@ -626,9 +646,7 @@ const Dashboard = ({vaults, setPage, setSelectedVault}) => {
         <div style={{fontSize:15,color:"var(--text1)",marginTop:6,fontWeight:400}}>Real-time AI-optimized yield across Mantle DeFi</div>
       </div>
 
-      <FeatureGridDemo />
-
-      <div style={{display:"flex",gap:20,marginBottom:36,flexWrap:"wrap",marginTop:40}}>
+      <div style={{display:"flex",gap:20,marginBottom:36,flexWrap:"wrap",marginTop:0}}>
         <StatCard label="Total Portfolio" value={`$${totalValue.toLocaleString()}`} sub={`+$${totalReturn.toLocaleString()} returns`} accent="#8b5cf6" delay={0}/>
         <StatCard label="Avg APY" value="18.6%" sub="Across all vaults" accent="#10b981" delay={0.05}/>
         <StatCard label="Active Vaults" value={vaults.length} sub="All performing" accent="#3b82f6" delay={0.1}/>
