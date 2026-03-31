@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useId } from "react";
 import * as THREE from "three";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { LayoutDashboard, Vault, Bot, BarChart2, Settings } from 'lucide-react';
+import { LayoutDashboard, Vault, Bot, BarChart2, Settings, ChevronDown, Check } from 'lucide-react';
 
 // ── Fonts & Global Styles ──────────────────────────────────────────────────
 const FontLink = () => (
@@ -29,12 +29,13 @@ const FontLink = () => (
     html, body { height: 100%; background: var(--bg0); }
     body { color: var(--text0); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
     * { scrollbar-width: thin; scrollbar-color: rgba(99,120,200,0.2) transparent; }
-    input, button, select { font-family: var(--sans); }
+    input, button { font-family: var(--sans); }
     @keyframes fadeUp  { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
     @keyframes spin    { to{transform:rotate(360deg)} }
     @keyframes float   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
     @keyframes ticker  { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
     @keyframes authIn  { from{opacity:0;transform:translateY(28px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+    @keyframes dropIn  { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
     .fade-up   { animation: fadeUp 0.45s ease both; }
     .fade-up-2 { animation: fadeUp 0.45s 0.08s ease both; }
     .fade-up-3 { animation: fadeUp 0.45s 0.16s ease both; }
@@ -50,16 +51,20 @@ const PROTOCOLS = {
   "Agni Finance": { color: "#10b981", apy: 14.7, tvl: "203M", risk: "low" },
 };
 
-const genHistory = (days=30, start=10000, drift=1.003) =>
-  Array.from({length: days}, (_, i) => {
+// FIX 2: genHistory now correctly simulates returns using blended APY
+const genHistory = (days = 30, start = 10000, drift = 1.003) =>
+  Array.from({ length: days }, (_, i) => {
     const date = new Date();
     date.setDate(date.getDate() - (days - i));
-    const val = start * Math.pow(drift, i) + (Math.random() - 0.4) * start * 0.01;
+    const val = start * Math.pow(drift, i) + (Math.random() - 0.4) * start * 0.008;
     return {
-      date: date.toLocaleDateString("en", {month:"short", day:"numeric"}),
-      value: Math.round(val)
+      date: date.toLocaleDateString("en", { month: "short", day: "numeric" }),
+      value: Math.round(val),
     };
   });
+
+// FIX 2: compute drift from blended APY so new vaults show real returns
+const driftFromAPY = (blendedAPY) => 1 + (blendedAPY / 100) / 365;
 
 const MOCK_VAULTS = [
   {
@@ -73,11 +78,11 @@ const MOCK_VAULTS = [
     initialDepositUSD: 20000,
     autoRebalanceEnabled: true,
     allocations: [
-      {protocol:"Rivera", pct:40, apy:18.4},
-      {protocol:"Merchant Moe", pct:45, apy:22.1},
-      {protocol:"Agni Finance", pct:15, apy:14.7}
+      { protocol: "Rivera",         pct: 40, apy: 18.4 },
+      { protocol: "Merchant Moe",   pct: 45, apy: 22.1 },
+      { protocol: "Agni Finance",   pct: 15, apy: 14.7 },
     ],
-    history: genHistory(30, 20000, 1.004)
+    history: genHistory(30, 20000, 1.004),
   },
   {
     id: 2,
@@ -90,11 +95,11 @@ const MOCK_VAULTS = [
     initialDepositUSD: 50000,
     autoRebalanceEnabled: false,
     allocations: [
-      {protocol:"Rivera", pct:20, apy:18.4},
-      {protocol:"Merchant Moe", pct:10, apy:22.1},
-      {protocol:"Agni Finance", pct:70, apy:14.7}
+      { protocol: "Rivera",         pct: 20, apy: 18.4 },
+      { protocol: "Merchant Moe",   pct: 10, apy: 22.1 },
+      { protocol: "Agni Finance",   pct: 70, apy: 14.7 },
     ],
-    history: genHistory(30, 50000, 1.0015)
+    history: genHistory(30, 50000, 1.0015),
   },
 ];
 
@@ -103,7 +108,7 @@ const SENTIMENT = {
   label: "Bullish",
   confidence: 84,
   summary: "Strong inflows to Mantle ecosystem. Rivera TVL up 18% WoW. MNT price momentum positive.",
-  recommendation: "Increase exposure to higher-yield protocols."
+  recommendation: "Increase exposure to higher-yield protocols.",
 };
 
 const MOCK_RECS = [
@@ -114,7 +119,7 @@ const MOCK_RECS = [
     current: [40, 45, 15],
     recommended: [25, 60, 15],
     projectedAPY: 20.8,
-    status: "pending"
+    status: "pending",
   },
   {
     id: 2,
@@ -123,18 +128,14 @@ const MOCK_RECS = [
     current: [20, 10, 70],
     recommended: [30, 15, 55],
     projectedAPY: 16.2,
-    status: "pending"
+    status: "pending",
   },
 ];
 
 const TICKER_ITEMS = [
-  "MNT $0.841 +4.2%",
-  "ETH $3,241 +1.8%",
-  "Rivera APY 18.4%",
-  "Merchant Moe APY 22.1%",
-  "Agni Finance APY 14.7%",
-  "Total Mantle TVL $1.2B",
-  "MAAV AUM $2.4M +12%"
+  "MNT $0.841 +4.2%", "ETH $3,241 +1.8%", "Rivera APY 18.4%",
+  "Merchant Moe APY 22.1%", "Agni Finance APY 14.7%",
+  "Total Mantle TVL $1.2B", "MAAV AUM $2.4M +12%",
 ];
 
 // ── Three.js Shader Background ─────────────────────────────────────────────
@@ -143,15 +144,14 @@ const ShaderBackground = () => {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const vertexShader = `void main(){gl_Position=vec4(position,1.0);}`;
+    const vertexShader   = `void main(){gl_Position=vec4(position,1.0);}`;
     const fragmentShader = `
       precision highp float;
       uniform vec2  resolution;
       uniform float time;
       void main(void){
         vec2 uv=(gl_FragCoord.xy*2.0-resolution.xy)/min(resolution.x,resolution.y);
-        float t=time*0.05;
-        float lw=0.002;
+        float t=time*0.05; float lw=0.002;
         vec3 color=vec3(0.0);
         for(int j=0;j<3;j++){
           for(int i=0;i<5;i++){
@@ -161,60 +161,30 @@ const ShaderBackground = () => {
         gl_FragColor=vec4(color[0],color[1],color[2],1.0);
       }
     `;
-    const camera = new THREE.Camera();
-    camera.position.z = 1;
-    const scene = new THREE.Scene();
+    const camera = new THREE.Camera(); camera.position.z = 1;
+    const scene  = new THREE.Scene();
     const geometry = new THREE.PlaneGeometry(2, 2);
-    const uniforms = {
-      time: { type: "f", value: 1.0 },
-      resolution: { type: "v2", value: new THREE.Vector2() }
-    };
+    const uniforms = { time: { type:"f", value:1.0 }, resolution: { type:"v2", value:new THREE.Vector2() } };
     const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
     scene.add(new THREE.Mesh(geometry, material));
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
-    const resize = () => {
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      uniforms.resolution.value.set(renderer.domElement.width, renderer.domElement.height);
-    };
-    resize();
-    window.addEventListener("resize", resize);
+    const resize = () => { renderer.setSize(window.innerWidth, window.innerHeight); uniforms.resolution.value.set(renderer.domElement.width, renderer.domElement.height); };
+    resize(); window.addEventListener("resize", resize);
     let animId;
-    const animate = () => {
-      animId = requestAnimationFrame(animate);
-      uniforms.time.value += 0.05;
-      renderer.render(scene, camera);
-    };
+    const animate = () => { animId = requestAnimationFrame(animate); uniforms.time.value += 0.05; renderer.render(scene, camera); };
     animate();
-    return () => {
-      window.removeEventListener("resize", resize);
-      cancelAnimationFrame(animId);
-      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
-      renderer.dispose();
-      geometry.dispose();
-      material.dispose();
-    };
+    return () => { window.removeEventListener("resize", resize); cancelAnimationFrame(animId); if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement); renderer.dispose(); geometry.dispose(); material.dispose(); };
   }, []);
-  return (
-    <div
-      ref={containerRef}
-      style={{
-        position: "fixed", inset: 0, zIndex: 0,
-        pointerEvents: "none", opacity: 0.25, mixBlendMode: "screen"
-      }}
-    />
-  );
+  return <div ref={containerRef} style={{ position:"fixed", inset:0, zIndex:0, pointerEvents:"none", opacity:0.25, mixBlendMode:"screen" }} />;
 };
 
 const GlobalOverlay = () => (
-  <div style={{
-    position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none",
-    background: "radial-gradient(ellipse 120% 80% at 50% 0%,rgba(2,4,10,0.60) 0%,rgba(2,4,10,0.90) 100%)"
-  }} />
+  <div style={{ position:"fixed", inset:0, zIndex:1, pointerEvents:"none", background:"radial-gradient(ellipse 120% 80% at 50% 0%,rgba(2,4,10,0.60) 0%,rgba(2,4,10,0.90) 100%)" }} />
 );
 
-// ── Grid Pattern (for Sidebar) ─────────────────────────────────────────────
+// ── Grid Pattern ───────────────────────────────────────────────────────────
 function GridPattern({ width, height, x, y, squares, style, ...props }) {
   const patternId = useId();
   return (
@@ -226,7 +196,7 @@ function GridPattern({ width, height, x, y, squares, style, ...props }) {
       </defs>
       <rect width="100%" height="100%" fill={`url(#${patternId})`} />
       {squares && (
-        <svg x={x} y={y} style={{overflow:"visible"}}>
+        <svg x={x} y={y} style={{ overflow:"visible" }}>
           {squares.map(([sx, sy], index) => (
             <rect key={index} strokeWidth="0" width={width+1} height={height+1} x={sx*width} y={sy*height} fill="rgba(139,92,246,0.08)"/>
           ))}
@@ -236,173 +206,135 @@ function GridPattern({ width, height, x, y, squares, style, ...props }) {
   );
 }
 
-// ── UI Primitives ─────────────────────────────────────────────────────────
-const Badge = ({label, color}) => (
-  <span style={{
-    background: color + "20", color, border: `1px solid ${color}40`,
-    borderRadius: 6, padding: "3px 10px", fontSize: 11,
-    fontFamily: "var(--mono)", letterSpacing: "0.05em", fontWeight: 500
-  }}>{label}</span>
+// ── UI Primitives ──────────────────────────────────────────────────────────
+const Badge = ({ label, color }) => (
+  <span style={{ background:color+"20", color, border:`1px solid ${color}40`, borderRadius:6, padding:"3px 10px", fontSize:11, fontFamily:"var(--mono)", letterSpacing:"0.05em", fontWeight:500 }}>{label}</span>
 );
 
-const StatCard = ({label, value, sub, accent, delay=0}) => {
+const StatCard = ({ label, value, sub, accent, delay=0 }) => {
   const id = useId();
   return (
-    <div className="fade-up" style={{
-      animationDelay: `${delay}s`,
-      background: `linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%)`,
-      backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)",
-      border: `1px solid rgba(255,255,255,0.10)`,
-      borderTop: `1px solid rgba(255,255,255,0.18)`,
-      borderLeft: `1px solid rgba(255,255,255,0.14)`,
-      borderRadius: 16, padding: "20px 24px",
-      flex: 1, minWidth: 160, position: "relative", overflow: "hidden",
-      boxShadow: `0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05) inset, 0 0 20px ${accent}15`
-    }}>
-      {/* Grid pattern */}
-      <svg aria-hidden="true" style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.3,pointerEvents:"none"}}>
-        <defs>
-          <pattern id={id} width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M.5 20V.5H20" fill="none" stroke="rgba(139,92,246,0.25)" strokeWidth="0.5"/>
-          </pattern>
-        </defs>
+    <div className="fade-up" style={{ animationDelay:`${delay}s`, background:"linear-gradient(135deg,rgba(255,255,255,0.07) 0%,rgba(255,255,255,0.03) 100%)", backdropFilter:"blur(32px)", WebkitBackdropFilter:"blur(32px)", border:"1px solid rgba(255,255,255,0.10)", borderTop:"1px solid rgba(255,255,255,0.18)", borderLeft:"1px solid rgba(255,255,255,0.14)", borderRadius:16, padding:"20px 24px", flex:1, minWidth:160, position:"relative", overflow:"hidden", boxShadow:`0 8px 32px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05) inset,0 0 20px ${accent}15` }}>
+      <svg aria-hidden="true" style={{ position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.3,pointerEvents:"none" }}>
+        <defs><pattern id={id} width="20" height="20" patternUnits="userSpaceOnUse"><path d="M.5 20V.5H20" fill="none" stroke="rgba(139,92,246,0.25)" strokeWidth="0.5"/></pattern></defs>
         <rect width="100%" height="100%" fill={`url(#${id})`}/>
       </svg>
-      {/* Top accent line */}
-      <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, height: 2,
-        background: `linear-gradient(90deg,${accent}00,${accent},${accent}00)`
-      }} />
-      {/* Glass shine */}
-      <div style={{
-        position:"absolute", top:0, left:0, right:0, height:"50%",
-        background:"linear-gradient(180deg,rgba(255,255,255,0.06) 0%,rgba(255,255,255,0) 100%)",
-        borderRadius:"16px 16px 0 0", pointerEvents:"none"
-      }}/>
-      <div style={{position:"relative",zIndex:1}}>
-        <div style={{
-          fontSize: 11, color: "var(--text2)", fontFamily: "var(--mono)",
-          textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8, fontWeight: 500
-        }}>{label}</div>
-        <div style={{fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text0)"}}>{value}</div>
-        {sub && <div style={{fontSize: 12, color: accent, marginTop: 4, fontWeight: 500}}>{sub}</div>}
+      <div style={{ position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${accent}00,${accent},${accent}00)` }}/>
+      <div style={{ position:"absolute",top:0,left:0,right:0,height:"50%",background:"linear-gradient(180deg,rgba(255,255,255,0.06) 0%,rgba(255,255,255,0) 100%)",borderRadius:"16px 16px 0 0",pointerEvents:"none" }}/>
+      <div style={{ position:"relative",zIndex:1 }}>
+        <div style={{ fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:8,fontWeight:500 }}>{label}</div>
+        <div style={{ fontSize:26,fontWeight:700,letterSpacing:"-0.02em",color:"var(--text0)" }}>{value}</div>
+        {sub && <div style={{ fontSize:12,color:accent,marginTop:4,fontWeight:500 }}>{sub}</div>}
       </div>
     </div>
   );
 };
 
-const Card = ({children, style, glow, className}) => {
+const Card = ({ children, style, glow, className }) => {
   const id = useId();
   return (
-    <div className={className} style={{
-      background: "linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)",
-      backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)",
-      border: "1px solid rgba(255,255,255,0.10)",
-      borderTop: "1px solid rgba(255,255,255,0.16)",
-      borderLeft: "1px solid rgba(255,255,255,0.12)",
-      borderRadius: 16, padding: 24,
-      position: "relative", overflow: "hidden",
-      boxShadow: glow
-        ? "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,92,246,0.2) inset, 0 0 40px rgba(139,92,246,0.15)"
-        : "0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05) inset",
-      transition: "all 0.3s ease", ...style
-    }}>
-      {/* Grid pattern */}
-      <svg aria-hidden="true" style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.3,pointerEvents:"none"}}>
-        <defs>
-          <pattern id={id} width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M.5 20V.5H20" fill="none" stroke="rgba(139,92,246,0.25)" strokeWidth="0.5"/>
-          </pattern>
-        </defs>
+    <div className={className} style={{ background:"linear-gradient(135deg,rgba(255,255,255,0.07) 0%,rgba(255,255,255,0.02) 100%)", backdropFilter:"blur(32px)", WebkitBackdropFilter:"blur(32px)", border:"1px solid rgba(255,255,255,0.10)", borderTop:"1px solid rgba(255,255,255,0.16)", borderLeft:"1px solid rgba(255,255,255,0.12)", borderRadius:16, padding:24, position:"relative", overflow:"hidden", boxShadow:glow?"0 8px 32px rgba(0,0,0,0.5),0 0 0 1px rgba(139,92,246,0.2) inset,0 0 40px rgba(139,92,246,0.15)":"0 8px 32px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.05) inset", transition:"all 0.3s ease",...style }}>
+      <svg aria-hidden="true" style={{ position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.3,pointerEvents:"none" }}>
+        <defs><pattern id={id} width="20" height="20" patternUnits="userSpaceOnUse"><path d="M.5 20V.5H20" fill="none" stroke="rgba(139,92,246,0.25)" strokeWidth="0.5"/></pattern></defs>
         <rect width="100%" height="100%" fill={`url(#${id})`}/>
       </svg>
-      {/* Glass shine overlay */}
-      <div style={{
-        position:"absolute", top:0, left:0, right:0, height:"40%",
-        background:"linear-gradient(180deg,rgba(255,255,255,0.05) 0%,rgba(255,255,255,0) 100%)",
-        borderRadius:"16px 16px 0 0", pointerEvents:"none"
-      }}/>
-      <div style={{position:"relative",zIndex:1}}>{children}</div>
+      <div style={{ position:"absolute",top:0,left:0,right:0,height:"40%",background:"linear-gradient(180deg,rgba(255,255,255,0.05) 0%,rgba(255,255,255,0) 100%)",borderRadius:"16px 16px 0 0",pointerEvents:"none" }}/>
+      <div style={{ position:"relative",zIndex:1 }}>{children}</div>
     </div>
   );
 };
 
-const Btn = ({children, onClick, variant="primary", small, disabled, style: sx}) => {
+const Btn = ({ children, onClick, variant="primary", small, disabled, style:sx }) => {
   const base = {
-    primary: {background:"linear-gradient(135deg,#8b5cf6,#3b82f6)",color:"#fff",border:"none",boxShadow:"0 4px 20px rgba(139,92,246,0.35)"},
-    ghost:   {background:"rgba(255,255,255,0.03)",color:"var(--text1)",border:"1px solid rgba(99,120,200,0.15)"},
-    danger:  {background:"rgba(239,68,68,0.10)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.25)"},
-    success: {background:"rgba(16,185,129,0.10)",color:"#10b981",border:"1px solid rgba(16,185,129,0.25)"},
+    primary: { background:"linear-gradient(135deg,#8b5cf6,#3b82f6)", color:"#fff", border:"none", boxShadow:"0 4px 20px rgba(139,92,246,0.35)" },
+    ghost:   { background:"rgba(255,255,255,0.03)", color:"var(--text1)", border:"1px solid rgba(99,120,200,0.15)" },
+    danger:  { background:"rgba(239,68,68,0.10)", color:"#ef4444", border:"1px solid rgba(239,68,68,0.25)" },
+    success: { background:"rgba(16,185,129,0.10)", color:"#10b981", border:"1px solid rgba(16,185,129,0.25)" },
   };
   return (
-    <button onClick={onClick} disabled={disabled} style={{
-      ...base[variant], borderRadius: 8,
-      padding: small ? "8px 16px" : "12px 24px",
-      fontSize: small ? 12 : 14, fontWeight: 600,
-      cursor: disabled ? "not-allowed" : "pointer",
-      opacity: disabled ? 0.5 : 1, transition: "all 0.2s",
-      fontFamily: "var(--sans)", whiteSpace: "nowrap", ...sx
-    }}>{children}</button>
+    <button onClick={onClick} disabled={disabled} style={{ ...base[variant], borderRadius:8, padding:small?"8px 16px":"12px 24px", fontSize:small?12:14, fontWeight:600, cursor:disabled?"not-allowed":"pointer", opacity:disabled?0.5:1, transition:"all 0.2s", fontFamily:"var(--sans)", whiteSpace:"nowrap", ...sx }}>
+      {children}
+    </button>
   );
 };
 
-const Input = ({label, ...props}) => (
-  <div style={{marginBottom: 16}}>
-    {label && (
-      <label style={{
-        fontSize: 11, color: "var(--text2)", display: "block", marginBottom: 6,
-        fontFamily: "var(--mono)", textTransform: "uppercase",
-        letterSpacing: "0.1em", fontWeight: 500
-      }}>{label}</label>
-    )}
-    <input {...props} style={{
-      width: "100%", background: "rgba(255,255,255,0.03)",
-      border: "1px solid rgba(99,120,200,0.15)", borderRadius: 8,
-      padding: "12px 16px", color: "var(--text0)", fontSize: 14,
-      outline: "none", fontFamily: "var(--sans)", transition: "all 0.2s", ...props.style
-    }}
-      onFocus={e => { e.target.style.borderColor = "rgba(139,92,246,0.5)"; e.target.style.background = "rgba(255,255,255,0.05)"; }}
-      onBlur={e  => { e.target.style.borderColor = "rgba(99,120,200,0.15)"; e.target.style.background = "rgba(255,255,255,0.03)"; }}
+const Input = ({ label, ...props }) => (
+  <div style={{ marginBottom:16 }}>
+    {label && <label style={{ fontSize:11,color:"var(--text2)",display:"block",marginBottom:6,fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",fontWeight:500 }}>{label}</label>}
+    <input {...props} style={{ width:"100%",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(99,120,200,0.15)",borderRadius:8,padding:"12px 16px",color:"var(--text0)",fontSize:14,outline:"none",fontFamily:"var(--sans)",transition:"all 0.2s",...props.style }}
+      onFocus={e=>{ e.target.style.borderColor="rgba(139,92,246,0.5)"; e.target.style.background="rgba(255,255,255,0.05)"; }}
+      onBlur ={e=>{ e.target.style.borderColor="rgba(99,120,200,0.15)";  e.target.style.background="rgba(255,255,255,0.03)"; }}
     />
   </div>
 );
 
-const Select = ({label, children, ...props}) => (
-  <div style={{marginBottom: 16}}>
-    {label && (
-      <label style={{
-        fontSize: 11, color: "var(--text2)", display: "block", marginBottom: 6,
-        fontFamily: "var(--mono)", textTransform: "uppercase",
-        letterSpacing: "0.1em", fontWeight: 500
-      }}>{label}</label>
-    )}
-    <select {...props} style={{
-      width: "100%", background: "rgba(255,255,255,0.03)",
-      border: "1px solid rgba(99,120,200,0.15)", borderRadius: 8,
-      padding: "12px 16px", color: "var(--text0)", fontSize: 14,
-      outline: "none", fontFamily: "var(--sans)", appearance: "none", cursor: "pointer"
-    }}>{children}</select>
-  </div>
-);
+// ── FIX 1: Custom dark dropdown (replaces native <select>) ─────────────────
+const RISK_OPTIONS = [
+  { value:"conservative", label:"Conservative", sub:"stability first" },
+  { value:"moderate",     label:"Moderate",     sub:"balanced approach" },
+  { value:"aggressive",   label:"Aggressive",   sub:"max yield" },
+];
+const GOAL_OPTIONS = [
+  { value:"yield",     label:"Yield",     sub:"maximize APY" },
+  { value:"growth",    label:"Growth",    sub:"capital appreciation" },
+  { value:"stability", label:"Stability", sub:"preserve capital" },
+];
+
+const CustomSelect = ({ label, value, onChange, options }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = options.find(o => o.value === value) || options[0];
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div style={{ marginBottom:16, position:"relative" }} ref={ref}>
+      {label && <label style={{ fontSize:11,color:"var(--text2)",display:"block",marginBottom:6,fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",fontWeight:500 }}>{label}</label>}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ width:"100%",background:open?"rgba(255,255,255,0.07)":"rgba(255,255,255,0.03)",border:`1px solid ${open?"rgba(139,92,246,0.5)":"rgba(99,120,200,0.15)"}`,borderRadius:8,padding:"12px 16px",color:"var(--text0)",fontSize:14,outline:"none",fontFamily:"var(--sans)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all 0.2s",textAlign:"left" }}
+      >
+        <span>
+          <span style={{ fontWeight:500 }}>{selected.label}</span>
+          <span style={{ color:"var(--text2)",marginLeft:8,fontSize:12 }}>— {selected.sub}</span>
+        </span>
+        <ChevronDown size={16} style={{ color:"var(--text2)",transition:"transform 0.2s",transform:open?"rotate(180deg)":"rotate(0deg)" }}/>
+      </button>
+
+      {open && (
+        <div style={{ position:"absolute",top:"calc(100% + 6px)",left:0,right:0,zIndex:999,background:"rgba(10,14,28,0.97)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",border:"1px solid rgba(139,92,246,0.25)",borderRadius:10,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.05) inset",animation:"dropIn 0.15s ease both" }}>
+          {options.map(o => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              style={{ width:"100%",background:value===o.value?"rgba(139,92,246,0.15)":"transparent",border:"none",padding:"12px 16px",color:value===o.value?"#a78bfa":"var(--text1)",fontSize:14,fontFamily:"var(--sans)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",textAlign:"left",transition:"background 0.15s" }}
+              onMouseEnter={e=>{ if(value!==o.value) e.currentTarget.style.background="rgba(255,255,255,0.04)"; }}
+              onMouseLeave={e=>{ if(value!==o.value) e.currentTarget.style.background="transparent"; }}
+            >
+              <span>
+                <span style={{ fontWeight:value===o.value?600:500 }}>{o.label}</span>
+                <span style={{ color:"var(--text2)",marginLeft:8,fontSize:12 }}>— {o.sub}</span>
+              </span>
+              {value===o.value && <Check size={14} style={{ color:"#8b5cf6",flexShrink:0 }}/>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ── Ticker ─────────────────────────────────────────────────────────────────
 const Ticker = () => (
-  <div style={{
-    overflow: "hidden", borderBottom: "1px solid rgba(99,120,200,0.1)",
-    background: "rgba(4,8,16,0.85)", backdropFilter: "blur(16px)",
-    height: 36, display: "flex", alignItems: "center",
-    position: "relative", zIndex: 10
-  }}>
-    <div style={{
-      display: "flex", gap: 48, animation: "ticker 28s linear infinite",
-      whiteSpace: "nowrap", padding: "0 24px"
-    }}>
-      {[...TICKER_ITEMS, ...TICKER_ITEMS].map((t, i) => (
-        <span key={i} style={{
-          fontSize: 11, fontFamily: "var(--mono)",
-          color: t.includes("+") ? "#10b981" : "var(--text2)", fontWeight: 500
-        }}>
-          {t.includes("+") ? "▲ " : ""}{t}
+  <div style={{ overflow:"hidden",borderBottom:"1px solid rgba(99,120,200,0.1)",background:"rgba(4,8,16,0.85)",backdropFilter:"blur(16px)",height:36,display:"flex",alignItems:"center",position:"relative",zIndex:10 }}>
+    <div style={{ display:"flex",gap:48,animation:"ticker 28s linear infinite",whiteSpace:"nowrap",padding:"0 24px" }}>
+      {[...TICKER_ITEMS,...TICKER_ITEMS].map((t,i)=>(
+        <span key={i} style={{ fontSize:11,fontFamily:"var(--mono)",color:t.includes("+")?"#10b981":"var(--text2)",fontWeight:500 }}>
+          {t.includes("+")?"▲ ":""}{t}
         </span>
       ))}
     </div>
@@ -411,105 +343,46 @@ const Ticker = () => (
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
 const NAV = [
-  { label: "Dashboard", icon: LayoutDashboard },
-  { label: "Vaults",    icon: Vault },
-  { label: "AI Agent",  icon: Bot },
-  { label: "Analytics", icon: BarChart2 },
-  { label: "Settings",  icon: Settings },
+  { label:"Dashboard", icon:LayoutDashboard },
+  { label:"Vaults",    icon:Vault },
+  { label:"AI Agent",  icon:Bot },
+  { label:"Analytics", icon:BarChart2 },
+  { label:"Settings",  icon:Settings },
 ];
+const NAV_SQUARES = [[[1,1],[2,3],[3,2]],[[2,1],[1,3],[3,1]],[[1,2],[3,3],[2,2]],[[3,1],[1,1],[2,3]],[[2,2],[1,3],[3,2]]];
 
-const NAV_SQUARES = [
-  [[1,1],[2,3],[3,2]], [[2,1],[1,3],[3,1]], [[1,2],[3,3],[2,2]],
-  [[3,1],[1,1],[2,3]], [[2,2],[1,3],[3,2]],
-];
-
-const Sidebar = ({page, setPage, user}) => (
-  <aside style={{
-    width: 240,
-    background: "linear-gradient(180deg,rgba(4,8,16,0.95),rgba(2,4,10,0.98))",
-    backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)",
-    borderRight: "1px solid rgba(99,120,200,0.1)",
-    display: "flex", flexDirection: "column",
-    height: "100vh", position: "sticky", top: 0, flexShrink: 0, zIndex: 20
-  }}>
-    {/* Logo */}
-    <div style={{padding: "32px 24px 24px", borderBottom: "1px solid rgba(99,120,200,0.1)"}}>
-      <div style={{fontFamily:"var(--mono)",fontWeight:700,fontSize:20,letterSpacing:"-0.02em",textShadow:"0 0 30px rgba(139,92,246,0.6)"}}>
-        <span style={{color:"var(--purple)"}}>M</span>AAV
+const Sidebar = ({ page, setPage, user }) => (
+  <aside style={{ width:240,background:"linear-gradient(180deg,rgba(4,8,16,0.95),rgba(2,4,10,0.98))",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderRight:"1px solid rgba(99,120,200,0.1)",display:"flex",flexDirection:"column",height:"100vh",position:"sticky",top:0,flexShrink:0,zIndex:20 }}>
+    <div style={{ padding:"32px 24px 24px",borderBottom:"1px solid rgba(99,120,200,0.1)" }}>
+      <div style={{ fontFamily:"var(--mono)",fontWeight:700,fontSize:20,letterSpacing:"-0.02em",textShadow:"0 0 30px rgba(139,92,246,0.6)" }}>
+        <span style={{ color:"var(--purple)" }}>M</span>AAV
       </div>
-      <div style={{fontSize:10,color:"var(--text2)",fontFamily:"var(--mono)",marginTop:4,letterSpacing:"0.15em",fontWeight:500}}>MANTLE AI VAULT</div>
+      <div style={{ fontSize:10,color:"var(--text2)",fontFamily:"var(--mono)",marginTop:4,letterSpacing:"0.15em",fontWeight:500 }}>MANTLE AI VAULT</div>
     </div>
-
-    {/* Nav */}
-    <nav style={{padding: "16px 12px", flex: 1}}>
-      {NAV.map(({label, icon: Icon}, idx) => {
+    <nav style={{ padding:"16px 12px",flex:1 }}>
+      {NAV.map(({ label, icon:Icon }, idx) => {
         const active = page === label;
         return (
-          <button key={label} onClick={() => setPage(label)} style={{
-            position: "relative", overflow: "hidden",
-            display: "flex", alignItems: "center", gap: 12,
-            width: "100%", padding: "11px 14px", borderRadius: 10,
-            border: active ? "1px solid rgba(139,92,246,0.25)" : "1px solid transparent",
-            background: active ? "linear-gradient(90deg,rgba(139,92,246,0.12),rgba(59,130,246,0.06))" : "transparent",
-            color: active ? "#a78bfa" : "var(--text1)",
-            fontSize: 13, fontWeight: active ? 600 : 500,
-            cursor: "pointer", marginBottom: 4, transition: "all 0.2s",
-            textAlign: "left", fontFamily: "var(--sans)",
-          }}
-            onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
-            onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+          <button key={label} onClick={()=>setPage(label)} style={{ position:"relative",overflow:"hidden",display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",borderRadius:10,border:active?"1px solid rgba(139,92,246,0.25)":"1px solid transparent",background:active?"linear-gradient(90deg,rgba(139,92,246,0.12),rgba(59,130,246,0.06))":"transparent",color:active?"#a78bfa":"var(--text1)",fontSize:13,fontWeight:active?600:500,cursor:"pointer",marginBottom:4,transition:"all 0.2s",textAlign:"left",fontFamily:"var(--sans)" }}
+            onMouseEnter={e=>{ if(!active) e.currentTarget.style.background="rgba(255,255,255,0.03)"; }}
+            onMouseLeave={e=>{ if(!active) e.currentTarget.style.background="transparent"; }}
           >
-            {/* Grid pattern background */}
-            <GridPattern
-              width={16} height={16} x="0" y="0"
-              squares={NAV_SQUARES[idx]}
-              style={{
-                position: "absolute", inset: 0, width: "100%", height: "100%",
-                opacity: active ? 1 : 0, transition: "opacity 0.3s",
-              }}
-            />
-
-            {/* Icon box */}
-            <div style={{
-              position: "relative", zIndex: 1,
-              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: active
-                ? "linear-gradient(135deg,rgba(139,92,246,0.35),rgba(59,130,246,0.2))"
-                : "rgba(255,255,255,0.04)",
-              border: active ? "1px solid rgba(139,92,246,0.4)" : "1px solid rgba(255,255,255,0.06)",
-              boxShadow: active ? "0 0 12px rgba(139,92,246,0.3)" : "none",
-              transition: "all 0.2s",
-            }}>
-              <Icon size={15} strokeWidth={active ? 2 : 1.5} style={{color: active ? "#a78bfa" : "var(--text2)"}}/>
+            <GridPattern width={16} height={16} x="0" y="0" squares={NAV_SQUARES[idx]} style={{ position:"absolute",inset:0,width:"100%",height:"100%",opacity:active?1:0,transition:"opacity 0.3s" }}/>
+            <div style={{ position:"relative",zIndex:1,width:32,height:32,borderRadius:8,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:active?"linear-gradient(135deg,rgba(139,92,246,0.35),rgba(59,130,246,0.2))":"rgba(255,255,255,0.04)",border:active?"1px solid rgba(139,92,246,0.4)":"1px solid rgba(255,255,255,0.06)",boxShadow:active?"0 0 12px rgba(139,92,246,0.3)":"none",transition:"all 0.2s" }}>
+              <Icon size={15} strokeWidth={active?2:1.5} style={{ color:active?"#a78bfa":"var(--text2)" }}/>
             </div>
-
-            <span style={{position:"relative",zIndex:1}}>{label}</span>
-
-            {active && (
-              <span style={{
-                marginLeft: "auto", position: "relative", zIndex: 1,
-                width: 5, height: 5, borderRadius: "50%",
-                background: "#8b5cf6", boxShadow: "0 0 8px #8b5cf6"
-              }}/>
-            )}
+            <span style={{ position:"relative",zIndex:1 }}>{label}</span>
+            {active && <span style={{ marginLeft:"auto",position:"relative",zIndex:1,width:5,height:5,borderRadius:"50%",background:"#8b5cf6",boxShadow:"0 0 8px #8b5cf6" }}/>}
           </button>
         );
       })}
     </nav>
-
-    {/* User */}
-    <div style={{padding: "20px 24px", borderTop: "1px solid rgba(99,120,200,0.1)"}}>
-      <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <div style={{
-          width:36,height:36,borderRadius:"50%",
-          background:"linear-gradient(135deg,#8b5cf6,#3b82f6)",
-          display:"flex",alignItems:"center",justifyContent:"center",
-          fontSize:14,fontWeight:700,boxShadow:"0 2px 12px rgba(139,92,246,0.3)"
-        }}>{user.name[0]}</div>
+    <div style={{ padding:"20px 24px",borderTop:"1px solid rgba(99,120,200,0.1)" }}>
+      <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+        <div style={{ width:36,height:36,borderRadius:"50%",background:"linear-gradient(135deg,#8b5cf6,#3b82f6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,boxShadow:"0 2px 12px rgba(139,92,246,0.3)" }}>{user.name[0]}</div>
         <div>
-          <div style={{fontSize:13,fontWeight:600,color:"var(--text0)"}}>{user.name}</div>
-          <div style={{fontSize:11,color:"var(--text2)"}}>{user.email}</div>
+          <div style={{ fontSize:13,fontWeight:600,color:"var(--text0)" }}>{user.name}</div>
+          <div style={{ fontSize:11,color:"var(--text2)" }}>{user.email}</div>
         </div>
       </div>
     </div>
@@ -517,107 +390,61 @@ const Sidebar = ({page, setPage, user}) => (
 );
 
 // ── Auth Screen ────────────────────────────────────────────────────────────
-const AuthScreen = ({onLogin}) => {
-  const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({name:"", email:"demo@maav.io", password:"demo1234"});
+const AuthScreen = ({ onLogin }) => {
+  const [mode, setMode]   = useState("login");
+  const [form, setForm]   = useState({ name:"", email:"demo@maav.io", password:"demo1234" });
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-
+  const [err, setErr]     = useState("");
   const submit = () => {
-    if (!form.email || !form.password) { setErr("Please fill in all fields."); return; }
+    if (!form.email||!form.password) { setErr("Please fill in all fields."); return; }
     setLoading(true); setErr("");
-    setTimeout(() => { setLoading(false); onLogin({name: form.name || "DeFi Trader", email: form.email}); }, 900);
+    setTimeout(()=>{ setLoading(false); onLogin({ name:form.name||"DeFi Trader", email:form.email }); }, 900);
   };
-
   return (
-    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
-      <div className="auth-in" style={{marginBottom:40,textAlign:"center"}}>
-        <div style={{fontFamily:"var(--mono)",fontSize:56,fontWeight:700,letterSpacing:"-0.03em",lineHeight:1,textShadow:"0 0 60px rgba(139,92,246,0.8),0 0 120px rgba(59,130,246,0.4)"}}>
-          <span style={{color:"var(--purple)"}}>M</span><span style={{color:"var(--text0)"}}>AAV</span>
+    <div style={{ minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24 }}>
+      <div className="auth-in" style={{ marginBottom:40,textAlign:"center" }}>
+        <div style={{ fontFamily:"var(--mono)",fontSize:56,fontWeight:700,letterSpacing:"-0.03em",lineHeight:1,textShadow:"0 0 60px rgba(139,92,246,0.8),0 0 120px rgba(59,130,246,0.4)" }}>
+          <span style={{ color:"var(--purple)" }}>M</span><span style={{ color:"var(--text0)" }}>AAV</span>
         </div>
-        <div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",letterSpacing:"0.25em",marginTop:8,fontWeight:500}}>MANTLE AI VAULT</div>
-        <div style={{marginTop:16,fontSize:15,color:"var(--text1)",maxWidth:360,lineHeight:1.6,margin:"16px auto 0"}}>AI-powered DeFi yield optimization on Mantle Network</div>
+        <div style={{ fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",letterSpacing:"0.25em",marginTop:8,fontWeight:500 }}>MANTLE AI VAULT</div>
+        <div style={{ marginTop:16,fontSize:15,color:"var(--text1)",maxWidth:360,lineHeight:1.6,margin:"16px auto 0" }}>AI-powered DeFi yield optimization on Mantle Network</div>
       </div>
-
-      <div className="auth-in" style={{
-        width:"100%",maxWidth:440,
-        background:"linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)",
-        backdropFilter:"blur(48px)",WebkitBackdropFilter:"blur(48px)",
-        border:"1px solid rgba(255,255,255,0.12)",
-        borderTop:"1px solid rgba(255,255,255,0.20)",
-        borderLeft:"1px solid rgba(255,255,255,0.15)",
-        borderRadius:24,padding:"36px 40px",position:"relative",overflow:"hidden",
-        boxShadow:"0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06) inset, 0 0 60px rgba(139,92,246,0.12)"
-      }}>
-        {/* Grid pattern */}
-        <svg aria-hidden="true" style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.25,pointerEvents:"none"}}>
-          <defs>
-            <pattern id="auth-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <path d="M.5 20V.5H20" fill="none" stroke="rgba(139,92,246,0.3)" strokeWidth="0.5"/>
-            </pattern>
-          </defs>
+      <div className="auth-in" style={{ width:"100%",maxWidth:440,background:"linear-gradient(135deg,rgba(255,255,255,0.08) 0%,rgba(255,255,255,0.03) 100%)",backdropFilter:"blur(48px)",WebkitBackdropFilter:"blur(48px)",border:"1px solid rgba(255,255,255,0.12)",borderTop:"1px solid rgba(255,255,255,0.20)",borderLeft:"1px solid rgba(255,255,255,0.15)",borderRadius:24,padding:"36px 40px",position:"relative",overflow:"hidden",boxShadow:"0 32px 80px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.06) inset,0 0 60px rgba(139,92,246,0.12)" }}>
+        <svg aria-hidden="true" style={{ position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.25,pointerEvents:"none" }}>
+          <defs><pattern id="auth-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M.5 20V.5H20" fill="none" stroke="rgba(139,92,246,0.3)" strokeWidth="0.5"/></pattern></defs>
           <rect width="100%" height="100%" fill="url(#auth-grid)"/>
         </svg>
-        {/* Glass shine */}
-        <div style={{position:"absolute",top:0,left:0,right:0,height:"45%",background:"linear-gradient(180deg,rgba(255,255,255,0.07) 0%,rgba(255,255,255,0) 100%)",borderRadius:"24px 24px 0 0",pointerEvents:"none"}}/>
-        <div style={{position:"relative",zIndex:1}}>
-        <div style={{display:"flex",gap:0,marginBottom:28,background:"rgba(255,255,255,0.03)",borderRadius:12,padding:4}}>
-          {["login","register"].map(m => (
-            <button key={m} onClick={() => setMode(m)} style={{
-              flex:1,padding:"10px",borderRadius:10,border:"none",
-              background: mode===m ? "linear-gradient(135deg,rgba(139,92,246,0.25),rgba(59,130,246,0.15))" : "transparent",
-              color: mode===m ? "var(--text0)" : "var(--text2)",
-              fontSize:13,fontWeight: mode===m ? 600 : 500,cursor:"pointer",
-              fontFamily:"var(--sans)",transition:"all 0.2s",
-              boxShadow: mode===m ? "0 2px 8px rgba(0,0,0,0.3),inset 0 0 0 1px rgba(139,92,246,0.3)" : "none"
-            }}>
-              {m === "login" ? "Sign In" : "Register"}
-            </button>
-          ))}
+        <div style={{ position:"absolute",top:0,left:0,right:0,height:"45%",background:"linear-gradient(180deg,rgba(255,255,255,0.07) 0%,rgba(255,255,255,0) 100%)",borderRadius:"24px 24px 0 0",pointerEvents:"none" }}/>
+        <div style={{ position:"relative",zIndex:1 }}>
+          <div style={{ display:"flex",gap:0,marginBottom:28,background:"rgba(255,255,255,0.03)",borderRadius:12,padding:4 }}>
+            {["login","register"].map(m=>(
+              <button key={m} onClick={()=>setMode(m)} style={{ flex:1,padding:"10px",borderRadius:10,border:"none",background:mode===m?"linear-gradient(135deg,rgba(139,92,246,0.25),rgba(59,130,246,0.15))":"transparent",color:mode===m?"var(--text0)":"var(--text2)",fontSize:13,fontWeight:mode===m?600:500,cursor:"pointer",fontFamily:"var(--sans)",transition:"all 0.2s",boxShadow:mode===m?"0 2px 8px rgba(0,0,0,0.3),inset 0 0 0 1px rgba(139,92,246,0.3)":"none" }}>
+                {m==="login"?"Sign In":"Register"}
+              </button>
+            ))}
+          </div>
+          {mode==="register" && <Input label="Full Name" placeholder="Satoshi Nakamoto" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>}
+          <Input label="Email" type="email" placeholder="you@example.com" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/>
+          <Input label="Password" type="password" placeholder="••••••••" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/>
+          {err && <div style={{ color:"var(--red)",fontSize:13,marginBottom:12,fontWeight:500 }}>{err}</div>}
+          <button onClick={submit} disabled={loading} style={{ width:"100%",padding:"14px",fontSize:15,fontWeight:600,background:loading?"rgba(139,92,246,0.3)":"linear-gradient(135deg,#8b5cf6 0%,#3b82f6 100%)",color:"#fff",border:"none",borderRadius:10,cursor:loading?"not-allowed":"pointer",fontFamily:"var(--sans)",transition:"all 0.25s",boxShadow:loading?"none":"0 4px 28px rgba(139,92,246,0.5),0 1px 0 rgba(255,255,255,0.1) inset" }}>
+            {loading?<span style={{ display:"flex",alignItems:"center",gap:10,justifyContent:"center" }}><span style={{ width:16,height:16,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"spin 0.8s linear infinite" }}/>Authenticating...</span>:mode==="login"?"Sign In →":"Create Account →"}
+          </button>
+          <div style={{ marginTop:20,textAlign:"center",fontSize:12,color:"var(--text2)" }}>Demo credentials pre-filled — just hit sign in</div>
         </div>
-        {mode === "register" && (
-          <Input label="Full Name" placeholder="Satoshi Nakamoto" value={form.name} onChange={e => setForm({...form, name:e.target.value})} />
-        )}
-        <Input label="Email" type="email" placeholder="you@example.com" value={form.email} onChange={e => setForm({...form, email:e.target.value})} />
-        <Input label="Password" type="password" placeholder="••••••••" value={form.password} onChange={e => setForm({...form, password:e.target.value})} />
-        {err && <div style={{color:"var(--red)",fontSize:13,marginBottom:12,fontWeight:500}}>{err}</div>}
-        <button onClick={submit} disabled={loading} style={{
-          width:"100%",padding:"14px",fontSize:15,fontWeight:600,
-          background: loading ? "rgba(139,92,246,0.3)" : "linear-gradient(135deg,#8b5cf6 0%,#3b82f6 100%)",
-          color:"#fff",border:"none",borderRadius:10,cursor: loading ? "not-allowed" : "pointer",
-          fontFamily:"var(--sans)",transition:"all 0.25s",
-          boxShadow: loading ? "none" : "0 4px 28px rgba(139,92,246,0.5),0 1px 0 rgba(255,255,255,0.1) inset"
-        }}>
-          {loading
-            ? <span style={{display:"flex",alignItems:"center",gap:10,justifyContent:"center"}}>
-                <span style={{width:16,height:16,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"spin 0.8s linear infinite"}}/>
-                Authenticating...
-              </span>
-            : mode === "login" ? "Sign In →" : "Create Account →"
-          }
-        </button>
-        <div style={{marginTop:20,textAlign:"center",fontSize:12,color:"var(--text2)"}}>Demo credentials pre-filled — just hit sign in</div>
-        </div>{/* end z-index wrapper */}
-      </div>{/* end auth box */}
-
-      <div className="auth-in" style={{marginTop:28,display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
-        {Object.entries(PROTOCOLS).map(([name, p]) => (
-          <div key={name} style={{
-            fontSize:11,fontFamily:"var(--mono)",color:p.color,
-            background: p.color+"15",border:`1px solid ${p.color}35`,
-            backdropFilter:"blur(8px)",borderRadius:8,padding:"6px 12px",
-            letterSpacing:"0.06em",fontWeight:500
-          }}>
+      </div>
+      <div className="auth-in" style={{ marginTop:28,display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap" }}>
+        {Object.entries(PROTOCOLS).map(([name,p])=>(
+          <div key={name} style={{ fontSize:11,fontFamily:"var(--mono)",color:p.color,background:p.color+"15",border:`1px solid ${p.color}35`,backdropFilter:"blur(8px)",borderRadius:8,padding:"6px 12px",letterSpacing:"0.06em",fontWeight:500 }}>
             {name.split(" ")[0]} {p.apy}% APY
           </div>
         ))}
       </div>
-
-      <div className="auth-in" style={{marginTop:24,display:"flex",gap:32,justifyContent:"center"}}>
-        {[["$1.2B","Mantle TVL"],["18.6%","Avg APY"],["3","Protocols"]].map(([v, l]) => (
-          <div key={l} style={{textAlign:"center"}}>
-            <div style={{fontFamily:"var(--mono)",fontWeight:700,fontSize:22,textShadow:"0 0 24px rgba(139,92,246,0.6)"}}>{v}</div>
-            <div style={{fontSize:10,color:"var(--text2)",fontFamily:"var(--mono)",letterSpacing:"0.12em",textTransform:"uppercase",marginTop:4,fontWeight:500}}>{l}</div>
+      <div className="auth-in" style={{ marginTop:24,display:"flex",gap:32,justifyContent:"center" }}>
+        {[["$1.2B","Mantle TVL"],["18.6%","Avg APY"],["3","Protocols"]].map(([v,l])=>(
+          <div key={l} style={{ textAlign:"center" }}>
+            <div style={{ fontFamily:"var(--mono)",fontWeight:700,fontSize:22,textShadow:"0 0 24px rgba(139,92,246,0.6)" }}>{v}</div>
+            <div style={{ fontSize:10,color:"var(--text2)",fontFamily:"var(--mono)",letterSpacing:"0.12em",textTransform:"uppercase",marginTop:4,fontWeight:500 }}>{l}</div>
           </div>
         ))}
       </div>
@@ -625,91 +452,82 @@ const AuthScreen = ({onLogin}) => {
   );
 };
 
-// ── Dashboard ─────────────────────────────────────────────────────────────
-const Dashboard = ({vaults, setPage, setSelectedVault}) => {
-  const totalValue = vaults.reduce((s, v) => s + v.totalValueUSD, 0);
-  const totalInit  = vaults.reduce((s, v) => s + v.initialDepositUSD, 0);
+// ── Dashboard ──────────────────────────────────────────────────────────────
+const Dashboard = ({ vaults, setPage, setSelectedVault }) => {
+  const totalValue  = vaults.reduce((s,v)=>s+v.totalValueUSD,0);
+  const totalInit   = vaults.reduce((s,v)=>s+v.initialDepositUSD,0);
   const totalReturn = totalValue - totalInit;
-  const combined = genHistory(30, totalInit, 1.003);
-  const activities = [
-    {time:"2h ago", msg:"AI rebalanced Alpha Yield Maximizer", type:"rebalance"},
-    {time:"5h ago", msg:"Merchant Moe APY updated to 22.1%", type:"update"},
-    {time:"1d ago", msg:"Stable Growth Fund performance snapshot", type:"snapshot"},
-    {time:"2d ago", msg:"New recommendation: increase Rivera allocation", type:"rec"},
+  const combined    = genHistory(30, totalInit, 1.003);
+  const activities  = [
+    { time:"2h ago",  msg:"AI rebalanced Alpha Yield Maximizer",          type:"rebalance" },
+    { time:"5h ago",  msg:"Merchant Moe APY updated to 22.1%",            type:"update" },
+    { time:"1d ago",  msg:"Stable Growth Fund performance snapshot",       type:"snapshot" },
+    { time:"2d ago",  msg:"New recommendation: increase Rivera allocation", type:"rec" },
   ];
-  const typeColor = {rebalance:"#8b5cf6",update:"#3b82f6",snapshot:"var(--text2)",rec:"#10b981"};
-
+  const typeColor = { rebalance:"#8b5cf6",update:"#3b82f6",snapshot:"var(--text2)",rec:"#10b981" };
   return (
-    <div style={{padding:"40px 48px",maxWidth:1200,margin:"0 auto"}}>
-      <div className="fade-up" style={{marginBottom:36}}>
-        <h1 style={{fontSize:32,fontWeight:700,letterSpacing:"-0.02em",color:"var(--text0)"}}>Portfolio Overview</h1>
-        <div style={{fontSize:15,color:"var(--text1)",marginTop:6,fontWeight:400}}>Real-time AI-optimized yield across Mantle DeFi</div>
+    <div style={{ padding:"40px 48px",maxWidth:1200,margin:"0 auto" }}>
+      <div className="fade-up" style={{ marginBottom:36 }}>
+        <h1 style={{ fontSize:32,fontWeight:700,letterSpacing:"-0.02em" }}>Portfolio Overview</h1>
+        <div style={{ fontSize:15,color:"var(--text1)",marginTop:6 }}>Real-time AI-optimized yield across Mantle DeFi</div>
       </div>
-
-      <div style={{display:"flex",gap:20,marginBottom:36,flexWrap:"wrap",marginTop:0}}>
-        <StatCard label="Total Portfolio" value={`$${totalValue.toLocaleString()}`} sub={`+$${totalReturn.toLocaleString()} returns`} accent="#8b5cf6" delay={0}/>
-        <StatCard label="Avg APY" value="18.6%" sub="Across all vaults" accent="#10b981" delay={0.05}/>
-        <StatCard label="Active Vaults" value={vaults.length} sub="All performing" accent="#3b82f6" delay={0.1}/>
-        <StatCard label="AI Recommendations" value="2 pending" sub="Action required" accent="#f59e0b" delay={0.15}/>
+      <div style={{ display:"flex",gap:20,marginBottom:36,flexWrap:"wrap" }}>
+        <StatCard label="Total Portfolio"    value={`$${totalValue.toLocaleString()}`}  sub={`+$${totalReturn.toLocaleString()} returns`} accent="#8b5cf6" delay={0}/>
+        <StatCard label="Avg APY"            value="18.6%"        sub="Across all vaults"  accent="#10b981" delay={0.05}/>
+        <StatCard label="Active Vaults"      value={vaults.length} sub="All performing"    accent="#3b82f6" delay={0.1}/>
+        <StatCard label="AI Recommendations" value={`${vaults.length} pending`} sub="Action required" accent="#f59e0b" delay={0.15}/>
       </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:24,marginBottom:28}}>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 380px",gap:24,marginBottom:28 }}>
         <Card className="fade-up-2">
-          <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600}}>Portfolio Value (30d)</div>
+          <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600 }}>Portfolio Value (30d)</div>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={combined}>
-              <defs>
-                <linearGradient id="grad1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.4}/>
-                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" tick={{fill:"#64748b",fontSize:11,fontFamily:"Space Mono"}} tickLine={false} axisLine={false} interval={6}/>
-              <YAxis tick={{fill:"#64748b",fontSize:11,fontFamily:"Space Mono"}} tickLine={false} axisLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
-              <Tooltip contentStyle={{background:"rgba(16,24,48,0.95)",border:"1px solid rgba(139,92,246,0.3)",borderRadius:10,fontSize:13,fontFamily:"Space Mono",backdropFilter:"blur(16px)",color:"#f8fafc"}} formatter={v=>[`$${v.toLocaleString()}`,"Value"]}/>
+              <defs><linearGradient id="grad1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.4}/><stop offset="100%" stopColor="#8b5cf6" stopOpacity={0}/></linearGradient></defs>
+              <XAxis dataKey="date" tick={{ fill:"#64748b",fontSize:11,fontFamily:"Space Mono" }} tickLine={false} axisLine={false} interval={6}/>
+              <YAxis tick={{ fill:"#64748b",fontSize:11,fontFamily:"Space Mono" }} tickLine={false} axisLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
+              <Tooltip contentStyle={{ background:"rgba(16,24,48,0.95)",border:"1px solid rgba(139,92,246,0.3)",borderRadius:10,fontSize:13,fontFamily:"Space Mono",backdropFilter:"blur(16px)",color:"#f8fafc" }} formatter={v=>[`$${v.toLocaleString()}`,"Value"]}/>
               <Area type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#grad1)"/>
             </AreaChart>
           </ResponsiveContainer>
         </Card>
         <Card className="fade-up-3">
-          <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600}}>Activity Feed</div>
-          {activities.map((a, i) => (
-            <div key={i} style={{display:"flex",gap:12,marginBottom:16,alignItems:"flex-start"}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:typeColor[a.type],marginTop:6,flexShrink:0,boxShadow:`0 0 8px ${typeColor[a.type]}`}}/>
+          <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600 }}>Activity Feed</div>
+          {activities.map((a,i)=>(
+            <div key={i} style={{ display:"flex",gap:12,marginBottom:16,alignItems:"flex-start" }}>
+              <div style={{ width:8,height:8,borderRadius:"50%",background:typeColor[a.type],marginTop:6,flexShrink:0,boxShadow:`0 0 8px ${typeColor[a.type]}` }}/>
               <div>
-                <div style={{fontSize:13,lineHeight:1.5,color:"var(--text1)",fontWeight:500}}>{a.msg}</div>
-                <div style={{fontSize:11,color:"var(--text2)",marginTop:3,fontFamily:"var(--mono)"}}>{a.time}</div>
+                <div style={{ fontSize:13,lineHeight:1.5,color:"var(--text1)",fontWeight:500 }}>{a.msg}</div>
+                <div style={{ fontSize:11,color:"var(--text2)",marginTop:3,fontFamily:"var(--mono)" }}>{a.time}</div>
               </div>
             </div>
           ))}
         </Card>
       </div>
-
-      <div style={{fontSize:17,fontWeight:700,marginBottom:20,color:"var(--text0)"}}>Your Vaults</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-        {vaults.map((v, i) => {
-          const ret = v.totalValueUSD - v.initialDepositUSD;
-          const retPct = ((ret / v.initialDepositUSD) * 100).toFixed(1);
-          const blended = v.allocations.reduce((s, a) => s + a.apy * a.pct / 100, 0);
+      <div style={{ fontSize:17,fontWeight:700,marginBottom:20 }}>Your Vaults</div>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:20 }}>
+        {vaults.map((v,i)=>{
+          const ret     = v.totalValueUSD - v.initialDepositUSD;
+          const retPct  = ((ret/v.initialDepositUSD)*100).toFixed(1);
+          const blended = v.allocations.reduce((s,a)=>s+a.apy*a.pct/100,0);
           return (
-            <Card key={v.id} className={`fade-up-${i+2}`} style={{cursor:"pointer"}} onClick={() => { setSelectedVault(v); setPage("Vaults"); }}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+            <Card key={v.id} className={`fade-up-${i+2}`} style={{ cursor:"pointer" }} onClick={()=>{ setSelectedVault(v); setPage("Vaults"); }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
                 <div>
-                  <div style={{fontWeight:700,fontSize:16,color:"var(--text0)"}}>{v.name}</div>
-                  <div style={{fontSize:13,color:"var(--text2)",marginTop:4,fontWeight:400}}>{v.description}</div>
+                  <div style={{ fontWeight:700,fontSize:16 }}>{v.name}</div>
+                  <div style={{ fontSize:13,color:"var(--text2)",marginTop:4 }}>{v.description}</div>
                 </div>
                 <Badge label={v.riskLevel} color={v.riskLevel==="aggressive"?"#ef4444":v.riskLevel==="moderate"?"#f59e0b":"#10b981"}/>
               </div>
-              <div style={{display:"flex",gap:28,marginBottom:20}}>
-                <div><div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600}}>VALUE</div><div style={{fontSize:20,fontWeight:700,color:"var(--text0)"}}>${v.totalValueUSD.toLocaleString()}</div></div>
-                <div><div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600}}>RETURNS</div><div style={{fontSize:20,fontWeight:700,color:"#10b981"}}>+{retPct}%</div></div>
-                <div><div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600}}>BLEND APY</div><div style={{fontSize:20,fontWeight:700,color:"#8b5cf6"}}>{blended.toFixed(1)}%</div></div>
+              <div style={{ display:"flex",gap:28,marginBottom:20 }}>
+                <div><div style={{ fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600 }}>VALUE</div><div style={{ fontSize:20,fontWeight:700 }}>${v.totalValueUSD.toLocaleString()}</div></div>
+                <div><div style={{ fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600 }}>RETURNS</div><div style={{ fontSize:20,fontWeight:700,color:"#10b981" }}>+{retPct}%</div></div>
+                <div><div style={{ fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600 }}>BLEND APY</div><div style={{ fontSize:20,fontWeight:700,color:"#8b5cf6" }}>{blended.toFixed(1)}%</div></div>
               </div>
-              <div style={{display:"flex",gap:4,height:4,borderRadius:2,overflow:"hidden"}}>
-                {v.allocations.map(a => <div key={a.protocol} style={{width:`${a.pct}%`,background:PROTOCOLS[a.protocol].color}}/>)}
+              <div style={{ display:"flex",gap:4,height:4,borderRadius:2,overflow:"hidden" }}>
+                {v.allocations.map(a=><div key={a.protocol} style={{ width:`${a.pct}%`,background:PROTOCOLS[a.protocol].color }}/>)}
               </div>
-              <div style={{display:"flex",gap:16,marginTop:10}}>
-                {v.allocations.map(a => <div key={a.protocol} style={{fontSize:11,color:PROTOCOLS[a.protocol].color,fontFamily:"var(--mono)",fontWeight:600}}>{a.protocol.split(" ")[0]} {a.pct}%</div>)}
+              <div style={{ display:"flex",gap:16,marginTop:10 }}>
+                {v.allocations.map(a=><div key={a.protocol} style={{ fontSize:11,color:PROTOCOLS[a.protocol].color,fontFamily:"var(--mono)",fontWeight:600 }}>{a.protocol.split(" ")[0]} {a.pct}%</div>)}
               </div>
             </Card>
           );
@@ -720,145 +538,128 @@ const Dashboard = ({vaults, setPage, setSelectedVault}) => {
 };
 
 // ── Vaults ─────────────────────────────────────────────────────────────────
-const Vaults = ({vaults, setVaults, selected, setSelected}) => {
+const Vaults = ({ vaults, setVaults, selected, setSelected }) => {
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({name:"",description:"",riskLevel:"moderate",investmentGoal:"yield",deposit:""});
+  const [form, setForm] = useState({ name:"",description:"",riskLevel:"moderate",investmentGoal:"yield",deposit:"" });
   const [saving, setSaving] = useState(false);
 
   const createVault = () => {
     if (!form.name || !form.deposit) return;
     setSaving(true);
-    setTimeout(() => {
+    setTimeout(()=>{
       const allocs =
-        form.riskLevel === "aggressive"
-          ? [{protocol:"Rivera",pct:35,apy:18.4},{protocol:"Merchant Moe",pct:50,apy:22.1},{protocol:"Agni Finance",pct:15,apy:14.7}]
-          : form.riskLevel === "conservative"
-          ? [{protocol:"Rivera",pct:15,apy:18.4},{protocol:"Merchant Moe",pct:10,apy:22.1},{protocol:"Agni Finance",pct:75,apy:14.7}]
-          : [{protocol:"Rivera",pct:33,apy:18.4},{protocol:"Merchant Moe",pct:34,apy:22.1},{protocol:"Agni Finance",pct:33,apy:14.7}];
+        form.riskLevel==="aggressive" ? [{protocol:"Rivera",pct:35,apy:18.4},{protocol:"Merchant Moe",pct:50,apy:22.1},{protocol:"Agni Finance",pct:15,apy:14.7}]
+        : form.riskLevel==="conservative" ? [{protocol:"Rivera",pct:15,apy:18.4},{protocol:"Merchant Moe",pct:10,apy:22.1},{protocol:"Agni Finance",pct:75,apy:14.7}]
+        : [{protocol:"Rivera",pct:33,apy:18.4},{protocol:"Merchant Moe",pct:34,apy:22.1},{protocol:"Agni Finance",pct:33,apy:14.7}];
       const dep = Number(form.deposit);
+
+      // FIX 2: compute blended APY → drift → real positive returns
+      const blended = allocs.reduce((s,a)=>s+a.apy*a.pct/100,0);
+      const drift   = driftFromAPY(blended);
+      const history = genHistory(30, dep, drift);
+      const finalValue = history[history.length - 1].value;
+
       const nv = {
-        id: Date.now(), name: form.name, description: form.description || "Custom AI vault",
-        riskLevel: form.riskLevel, investmentGoal: form.investmentGoal,
-        status: "active", totalValueUSD: dep, initialDepositUSD: dep,
-        autoRebalanceEnabled: true, allocations: allocs, history: genHistory(7, dep, 1.002)
+        id: Date.now(), name:form.name, description:form.description||"Custom AI vault",
+        riskLevel:form.riskLevel, investmentGoal:form.investmentGoal,
+        status:"active", totalValueUSD:finalValue, initialDepositUSD:dep,
+        autoRebalanceEnabled:true, allocations:allocs, history,
       };
-      setVaults(p => [...p, nv]);
+      setVaults(p=>[...p,nv]);
       setSelected(nv); setSaving(false); setCreating(false);
     }, 1200);
   };
 
   if (creating) return (
-    <div style={{padding:"40px 48px",maxWidth:600,margin:"0 auto"}}>
-      <button onClick={() => setCreating(false)} style={{background:"none",border:"none",color:"var(--text1)",cursor:"pointer",marginBottom:24,fontSize:14,fontFamily:"var(--sans)",fontWeight:500}}>← Back</button>
-      <h1 className="fade-up" style={{fontSize:28,fontWeight:700,marginBottom:10,color:"var(--text0)"}}>Create AI Vault</h1>
-      <div className="fade-up" style={{fontSize:15,color:"var(--text1)",marginBottom:32}}>The AI agent will optimize your allocation automatically</div>
+    <div style={{ padding:"40px 48px",maxWidth:600,margin:"0 auto" }}>
+      <button onClick={()=>setCreating(false)} style={{ background:"none",border:"none",color:"var(--text1)",cursor:"pointer",marginBottom:24,fontSize:14,fontFamily:"var(--sans)",fontWeight:500 }}>← Back</button>
+      <h1 className="fade-up" style={{ fontSize:28,fontWeight:700,marginBottom:10 }}>Create AI Vault</h1>
+      <div className="fade-up" style={{ fontSize:15,color:"var(--text1)",marginBottom:32 }}>The AI agent will optimize your allocation automatically</div>
       <Card className="fade-up-2">
-        <Input label="Vault Name" placeholder="e.g. My Yield Machine" value={form.name} onChange={e => setForm({...form, name:e.target.value})} />
-        <Input label="Description (optional)" placeholder="What's this vault for?" value={form.description} onChange={e => setForm({...form, description:e.target.value})} />
-        <Select label="Risk Level" value={form.riskLevel} onChange={e => setForm({...form, riskLevel:e.target.value})}>
-          <option value="conservative">Conservative — stability first</option>
-          <option value="moderate">Moderate — balanced approach</option>
-          <option value="aggressive">Aggressive — max yield</option>
-        </Select>
-        <Select label="Investment Goal" value={form.investmentGoal} onChange={e => setForm({...form, investmentGoal:e.target.value})}>
-          <option value="yield">Yield — maximize APY</option>
-          <option value="growth">Growth — capital appreciation</option>
-          <option value="stability">Stability — preserve capital</option>
-        </Select>
-        <Input label="Initial Deposit (USD)" type="number" placeholder="10000" value={form.deposit} onChange={e => setForm({...form, deposit:e.target.value})} />
-        <div style={{background:"linear-gradient(135deg,rgba(139,92,246,0.08),rgba(59,130,246,0.05))",border:"1px solid rgba(139,92,246,0.2)",borderRadius:10,padding:16,marginBottom:24}}>
-          <div style={{fontSize:12,color:"#8b5cf6",fontFamily:"var(--mono)",marginBottom:10,fontWeight:600,letterSpacing:"0.05em"}}>AI ALLOCATION PREVIEW</div>
-          {(form.riskLevel==="aggressive"
-            ? [[35,"Rivera"],[50,"Merchant Moe"],[15,"Agni Finance"]]
-            : form.riskLevel==="conservative"
-            ? [[15,"Rivera"],[10,"Merchant Moe"],[75,"Agni Finance"]]
-            : [[33,"Rivera"],[34,"Merchant Moe"],[33,"Agni Finance"]]
-          ).map(([pct, name]) => (
-            <div key={name} style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--text1)",marginBottom:6,fontWeight:500}}>
-              <span style={{color:PROTOCOLS[name].color}}>{name}</span>
+        <Input label="Vault Name" placeholder="e.g. My Yield Machine" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
+        <Input label="Description (optional)" placeholder="What's this vault for?" value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/>
+
+        {/* FIX 1: Custom dropdowns — no more white background */}
+        <CustomSelect label="Risk Level"      value={form.riskLevel}      onChange={v=>setForm({...form,riskLevel:v})}      options={RISK_OPTIONS}/>
+        <CustomSelect label="Investment Goal" value={form.investmentGoal} onChange={v=>setForm({...form,investmentGoal:v})} options={GOAL_OPTIONS}/>
+
+        <Input label="Initial Deposit (USD)" type="number" placeholder="10000" value={form.deposit} onChange={e=>setForm({...form,deposit:e.target.value})}/>
+        <div style={{ background:"linear-gradient(135deg,rgba(139,92,246,0.08),rgba(59,130,246,0.05))",border:"1px solid rgba(139,92,246,0.2)",borderRadius:10,padding:16,marginBottom:24 }}>
+          <div style={{ fontSize:12,color:"#8b5cf6",fontFamily:"var(--mono)",marginBottom:10,fontWeight:600,letterSpacing:"0.05em" }}>AI ALLOCATION PREVIEW</div>
+          {(form.riskLevel==="aggressive"?[[35,"Rivera"],[50,"Merchant Moe"],[15,"Agni Finance"]]:form.riskLevel==="conservative"?[[15,"Rivera"],[10,"Merchant Moe"],[75,"Agni Finance"]]:[[33,"Rivera"],[34,"Merchant Moe"],[33,"Agni Finance"]]).map(([pct,name])=>(
+            <div key={name} style={{ display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--text1)",marginBottom:6,fontWeight:500 }}>
+              <span style={{ color:PROTOCOLS[name].color }}>{name}</span>
               <span>{pct}% · {PROTOCOLS[name].apy}% APY</span>
             </div>
           ))}
         </div>
-        <Btn onClick={createVault} disabled={saving || !form.name || !form.deposit} style={{width:"100%",padding:14}}>
-          {saving ? "Creating vault..." : "Deploy Vault →"}
+        <Btn onClick={createVault} disabled={saving||!form.name||!form.deposit} style={{ width:"100%",padding:14 }}>
+          {saving?"Creating vault...":"Deploy Vault →"}
         </Btn>
       </Card>
     </div>
   );
 
   if (selected) {
-    const ret = selected.totalValueUSD - selected.initialDepositUSD;
-    const retPct = ((ret / selected.initialDepositUSD) * 100).toFixed(2);
-    const blended = selected.allocations.reduce((s, a) => s + a.apy * a.pct / 100, 0);
-    const pieData = selected.allocations.map(a => ({name:a.protocol,value:a.pct,color:PROTOCOLS[a.protocol].color}));
+    const ret     = selected.totalValueUSD - selected.initialDepositUSD;
+    const retPct  = ((ret/selected.initialDepositUSD)*100).toFixed(2);
+    const blended = selected.allocations.reduce((s,a)=>s+a.apy*a.pct/100,0);
+    const pieData = selected.allocations.map(a=>({ name:a.protocol,value:a.pct,color:PROTOCOLS[a.protocol].color }));
     return (
-      <div style={{padding:"40px 48px",maxWidth:1100,margin:"0 auto"}}>
-        <button onClick={() => setSelected(null)} style={{background:"none",border:"none",color:"var(--text1)",cursor:"pointer",marginBottom:24,fontSize:14,fontFamily:"var(--sans)",fontWeight:500}}>← All vaults</button>
-        <div className="fade-up" style={{marginBottom:32}}>
-          <h1 style={{fontSize:28,fontWeight:700,color:"var(--text0)"}}>{selected.name}</h1>
-          <div style={{fontSize:14,color:"var(--text1)",marginTop:6}}>{selected.description}</div>
-          <div style={{display:"flex",gap:10,marginTop:14}}>
+      <div style={{ padding:"40px 48px",maxWidth:1100,margin:"0 auto" }}>
+        <button onClick={()=>setSelected(null)} style={{ background:"none",border:"none",color:"var(--text1)",cursor:"pointer",marginBottom:24,fontSize:14,fontFamily:"var(--sans)",fontWeight:500 }}>← All vaults</button>
+        <div className="fade-up" style={{ marginBottom:32 }}>
+          <h1 style={{ fontSize:28,fontWeight:700 }}>{selected.name}</h1>
+          <div style={{ fontSize:14,color:"var(--text1)",marginTop:6 }}>{selected.description}</div>
+          <div style={{ display:"flex",gap:10,marginTop:14 }}>
             <Badge label={selected.riskLevel} color={selected.riskLevel==="aggressive"?"#ef4444":selected.riskLevel==="moderate"?"#f59e0b":"#10b981"}/>
             <Badge label={selected.investmentGoal} color="#3b82f6"/>
             <Badge label={selected.autoRebalanceEnabled?"auto-rebalance ON":"manual"} color={selected.autoRebalanceEnabled?"#10b981":"var(--text2)"}/>
           </div>
         </div>
-        <div style={{display:"flex",gap:20,marginBottom:28,flexWrap:"wrap"}}>
-          <StatCard label="Total Value" value={`$${selected.totalValueUSD.toLocaleString()}`} accent="#8b5cf6"/>
+        <div style={{ display:"flex",gap:20,marginBottom:28,flexWrap:"wrap" }}>
+          <StatCard label="Total Value"   value={`$${selected.totalValueUSD.toLocaleString()}`} accent="#8b5cf6"/>
           <StatCard label="Total Returns" value={`+$${ret.toLocaleString()}`} sub={`+${retPct}%`} accent="#10b981"/>
-          <StatCard label="Blended APY" value={`${blended.toFixed(1)}%`} accent="#3b82f6"/>
+          <StatCard label="Blended APY"   value={`${blended.toFixed(1)}%`}  accent="#3b82f6"/>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 300px",gap:24,marginBottom:24}}>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 300px",gap:24,marginBottom:24 }}>
           <Card className="fade-up-2">
-            <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600}}>Performance History</div>
+            <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600 }}>Performance History</div>
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={selected.history}>
-                <defs>
-                  <linearGradient id="vg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4}/>
-                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="date" tick={{fill:"#64748b",fontSize:11,fontFamily:"Space Mono"}} tickLine={false} axisLine={false} interval={4}/>
-                <YAxis tick={{fill:"#64748b",fontSize:11,fontFamily:"Space Mono"}} tickLine={false} axisLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
-                <Tooltip contentStyle={{background:"rgba(16,24,48,0.95)",border:"1px solid rgba(59,130,246,0.3)",borderRadius:10,fontSize:13,fontFamily:"Space Mono",color:"#f8fafc"}} formatter={v=>[`$${v.toLocaleString()}`,"Value"]}/>
+                <defs><linearGradient id="vg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6" stopOpacity={0.4}/><stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
+                <XAxis dataKey="date" tick={{ fill:"#64748b",fontSize:11,fontFamily:"Space Mono" }} tickLine={false} axisLine={false} interval={4}/>
+                <YAxis tick={{ fill:"#64748b",fontSize:11,fontFamily:"Space Mono" }} tickLine={false} axisLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
+                <Tooltip contentStyle={{ background:"rgba(16,24,48,0.95)",border:"1px solid rgba(59,130,246,0.3)",borderRadius:10,fontSize:13,fontFamily:"Space Mono",color:"#f8fafc" }} formatter={v=>[`$${v.toLocaleString()}`,"Value"]}/>
                 <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2.5} fill="url(#vg)"/>
               </AreaChart>
             </ResponsiveContainer>
           </Card>
           <Card className="fade-up-3">
-            <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600}}>Allocation</div>
+            <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600 }}>Allocation</div>
             <PieChart width={250} height={140}>
               <Pie data={pieData} cx={125} cy={70} innerRadius={45} outerRadius={68} dataKey="value" strokeWidth={0}>
-                {pieData.map((e, i) => <Cell key={i} fill={e.color}/>)}
+                {pieData.map((e,i)=><Cell key={i} fill={e.color}/>)}
               </Pie>
             </PieChart>
-            {pieData.map(d => (
-              <div key={d.name} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:8,fontWeight:500}}>
-                <span style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{width:10,height:10,borderRadius:"50%",background:d.color,display:"inline-block"}}/>
-                  <span style={{color:"var(--text1)"}}>{d.name.split(" ")[0]}</span>
-                </span>
-                <span style={{color:d.color,fontFamily:"var(--mono)",fontWeight:600}}>{d.value}%</span>
+            {pieData.map(d=>(
+              <div key={d.name} style={{ display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:8,fontWeight:500 }}>
+                <span style={{ display:"flex",alignItems:"center",gap:8 }}><span style={{ width:10,height:10,borderRadius:"50%",background:d.color,display:"inline-block" }}/><span style={{ color:"var(--text1)" }}>{d.name.split(" ")[0]}</span></span>
+                <span style={{ color:d.color,fontFamily:"var(--mono)",fontWeight:600 }}>{d.value}%</span>
               </div>
             ))}
           </Card>
         </div>
         <Card className="fade-up-4">
-          <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600}}>Protocol Breakdown</div>
-          {selected.allocations.map(a => (
-            <div key={a.protocol} style={{display:"flex",alignItems:"center",gap:16,padding:"16px 0",borderBottom:"1px solid rgba(99,120,200,0.1)"}}>
-              <div style={{width:12,height:12,borderRadius:"50%",background:PROTOCOLS[a.protocol].color,boxShadow:`0 0 8px ${PROTOCOLS[a.protocol].color}`,flexShrink:0}}/>
-              <div style={{flex:1,fontWeight:600,color:"var(--text0)"}}>{a.protocol}</div>
-              <div style={{fontSize:13,color:"var(--text2)",fontFamily:"var(--mono)"}}>TVL ${PROTOCOLS[a.protocol].tvl}</div>
-              <div style={{width:100}}>
-                <div style={{height:5,borderRadius:3,background:"rgba(255,255,255,0.05)",overflow:"hidden"}}>
-                  <div style={{width:`${a.pct}%`,height:"100%",background:PROTOCOLS[a.protocol].color,borderRadius:3}}/>
-                </div>
-              </div>
-              <div style={{width:50,textAlign:"right",fontSize:14,fontFamily:"var(--mono)",fontWeight:600,color:"var(--text0)"}}>{a.pct}%</div>
-              <div style={{width:70,textAlign:"right"}}><Badge label={`${a.apy}%`} color={PROTOCOLS[a.protocol].color}/></div>
+          <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600 }}>Protocol Breakdown</div>
+          {selected.allocations.map(a=>(
+            <div key={a.protocol} style={{ display:"flex",alignItems:"center",gap:16,padding:"16px 0",borderBottom:"1px solid rgba(99,120,200,0.1)" }}>
+              <div style={{ width:12,height:12,borderRadius:"50%",background:PROTOCOLS[a.protocol].color,boxShadow:`0 0 8px ${PROTOCOLS[a.protocol].color}`,flexShrink:0 }}/>
+              <div style={{ flex:1,fontWeight:600 }}>{a.protocol}</div>
+              <div style={{ fontSize:13,color:"var(--text2)",fontFamily:"var(--mono)" }}>TVL ${PROTOCOLS[a.protocol].tvl}</div>
+              <div style={{ width:100 }}><div style={{ height:5,borderRadius:3,background:"rgba(255,255,255,0.05)",overflow:"hidden" }}><div style={{ width:`${a.pct}%`,height:"100%",background:PROTOCOLS[a.protocol].color,borderRadius:3 }}/></div></div>
+              <div style={{ width:50,textAlign:"right",fontSize:14,fontFamily:"var(--mono)",fontWeight:600 }}>{a.pct}%</div>
+              <div style={{ width:70,textAlign:"right" }}><Badge label={`${a.apy}%`} color={PROTOCOLS[a.protocol].color}/></div>
             </div>
           ))}
         </Card>
@@ -867,43 +668,37 @@ const Vaults = ({vaults, setVaults, selected, setSelected}) => {
   }
 
   return (
-    <div style={{padding:"40px 48px",maxWidth:1100,margin:"0 auto"}}>
-      <div className="fade-up" style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32}}>
+    <div style={{ padding:"40px 48px",maxWidth:1100,margin:"0 auto" }}>
+      <div className="fade-up" style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32 }}>
         <div>
-          <h1 style={{fontSize:32,fontWeight:700,letterSpacing:"-0.02em",color:"var(--text0)"}}>Vaults</h1>
-          <div style={{fontSize:15,color:"var(--text1)",marginTop:6}}>{vaults.length} active vaults</div>
+          <h1 style={{ fontSize:32,fontWeight:700,letterSpacing:"-0.02em" }}>Vaults</h1>
+          <div style={{ fontSize:15,color:"var(--text1)",marginTop:6 }}>{vaults.length} active vaults</div>
         </div>
-        <Btn onClick={() => setCreating(true)}>+ New Vault</Btn>
+        <Btn onClick={()=>setCreating(true)}>+ New Vault</Btn>
       </div>
-      <div style={{display:"grid",gap:20}}>
-        {vaults.map((v, i) => {
-          const ret = v.totalValueUSD - v.initialDepositUSD;
-          const blended = v.allocations.reduce((s, a) => s + a.apy * a.pct / 100, 0);
+      <div style={{ display:"grid",gap:20 }}>
+        {vaults.map((v,i)=>{
+          const ret     = v.totalValueUSD - v.initialDepositUSD;
+          const blended = v.allocations.reduce((s,a)=>s+a.apy*a.pct/100,0);
           return (
-            <Card key={v.id} className={`fade-up-${i+1}`} style={{cursor:"pointer"}} onClick={() => setSelected(v)}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{display:"flex",gap:24,alignItems:"center"}}>
-                  <div style={{
-                    width:52,height:52,borderRadius:12,
-                    background:`linear-gradient(135deg,${PROTOCOLS[v.allocations[0].protocol].color}25,${PROTOCOLS[v.allocations[1].protocol].color}15)`,
-                    border:`1px solid ${PROTOCOLS[v.allocations[0].protocol].color}40`,
-                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,
-                    boxShadow:`0 4px 20px ${PROTOCOLS[v.allocations[0].protocol].color}20`
-                  }}>⬡</div>
+            <Card key={v.id} className={`fade-up-${i+1}`} style={{ cursor:"pointer" }} onClick={()=>setSelected(v)}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                <div style={{ display:"flex",gap:24,alignItems:"center" }}>
+                  <div style={{ width:52,height:52,borderRadius:12,background:`linear-gradient(135deg,${PROTOCOLS[v.allocations[0].protocol].color}25,${PROTOCOLS[v.allocations[1].protocol].color}15)`,border:`1px solid ${PROTOCOLS[v.allocations[0].protocol].color}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:`0 4px 20px ${PROTOCOLS[v.allocations[0].protocol].color}20` }}>⬡</div>
                   <div>
-                    <div style={{fontWeight:700,fontSize:16,color:"var(--text0)"}}>{v.name}</div>
-                    <div style={{fontSize:13,color:"var(--text2)",marginTop:3}}>{v.description}</div>
-                    <div style={{display:"flex",gap:8,marginTop:8}}>
+                    <div style={{ fontWeight:700,fontSize:16 }}>{v.name}</div>
+                    <div style={{ fontSize:13,color:"var(--text2)",marginTop:3 }}>{v.description}</div>
+                    <div style={{ display:"flex",gap:8,marginTop:8 }}>
                       <Badge label={v.riskLevel} color={v.riskLevel==="aggressive"?"#ef4444":v.riskLevel==="moderate"?"#f59e0b":"#10b981"}/>
                       {v.autoRebalanceEnabled && <Badge label="auto-rebalance" color="#10b981"/>}
                     </div>
                   </div>
                 </div>
-                <div style={{display:"flex",gap:48,alignItems:"center"}}>
-                  <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600}}>VALUE</div><div style={{fontSize:24,fontWeight:700,color:"var(--text0)"}}>${v.totalValueUSD.toLocaleString()}</div></div>
-                  <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600}}>RETURNS</div><div style={{fontSize:24,fontWeight:700,color:"#10b981"}}>+${ret.toLocaleString()}</div></div>
-                  <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600}}>BLEND APY</div><div style={{fontSize:24,fontWeight:700,color:"#8b5cf6"}}>{blended.toFixed(1)}%</div></div>
-                  <div style={{color:"var(--text2)",fontSize:20}}>›</div>
+                <div style={{ display:"flex",gap:48,alignItems:"center" }}>
+                  <div style={{ textAlign:"right" }}><div style={{ fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600 }}>VALUE</div><div style={{ fontSize:24,fontWeight:700 }}>${v.totalValueUSD.toLocaleString()}</div></div>
+                  <div style={{ textAlign:"right" }}><div style={{ fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600 }}>RETURNS</div><div style={{ fontSize:24,fontWeight:700,color:"#10b981" }}>+${ret.toLocaleString()}</div></div>
+                  <div style={{ textAlign:"right" }}><div style={{ fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600 }}>BLEND APY</div><div style={{ fontSize:24,fontWeight:700,color:"#8b5cf6" }}>{blended.toFixed(1)}%</div></div>
+                  <div style={{ color:"var(--text2)",fontSize:20 }}>›</div>
                 </div>
               </div>
             </Card>
@@ -915,99 +710,124 @@ const Vaults = ({vaults, setVaults, selected, setSelected}) => {
 };
 
 // ── AI Agent ───────────────────────────────────────────────────────────────
-const AIAgent = ({vaults, recs, setRecs}) => {
+// FIX 3: generateRecs builds a recommendation for EVERY vault, including new ones
+const generateRecs = (vaults) =>
+  vaults.map((v, i) => {
+    const protocols  = Object.keys(PROTOCOLS);
+    const current    = v.allocations.map(a => a.pct);
+    // Shift weight toward highest APY protocol by 10–15%
+    const topIdx     = v.allocations.reduce((best, a, idx) => a.apy > v.allocations[best].apy ? idx : best, 0);
+    const recommended = current.map((p, idx) => idx === topIdx ? Math.min(p + 15, 70) : Math.max(p - Math.ceil(15/(current.length-1)), 5));
+    const blended    = v.allocations.reduce((s,a)=>s+a.apy*a.pct/100,0);
+    const projectedAPY = +(blended * 1.08).toFixed(1);
+    return {
+      id: Date.now() + i,
+      vaultId: v.id,
+      reason: `Market sentiment bullish (72/100). ${protocols[topIdx]} showing strongest APY momentum this week. Rebalancing to capture higher risk-adjusted yield while respecting your ${v.riskLevel} profile.`,
+      current,
+      recommended,
+      projectedAPY,
+      status: "pending",
+    };
+  });
+
+const AIAgent = ({ vaults, recs, setRecs }) => {
   const [analyzing, setAnalyzing] = useState(false);
-  const [analyzed, setAnalyzed] = useState(false);
-  const run = () => { setAnalyzing(true); setTimeout(() => { setAnalyzing(false); setAnalyzed(true); }, 2200); };
-  const handle = (id, action) => setRecs(p => p.map(r => r.id === id ? {...r, status:action} : r));
-  const sentScore = SENTIMENT.score;
-  const scoreColor = sentScore > 60 ? "#10b981" : sentScore > 40 ? "#f59e0b" : "#ef4444";
+  const [analyzed,  setAnalyzed]  = useState(recs.length > 0);
+
+  const run = () => {
+    setAnalyzing(true);
+    setTimeout(()=>{
+      // FIX 3: regenerate recs for ALL current vaults
+      setRecs(generateRecs(vaults));
+      setAnalyzing(false);
+      setAnalyzed(true);
+    }, 2200);
+  };
+
+  const handle = (id, action) => setRecs(p=>p.map(r=>r.id===id?{...r,status:action}:r));
+  const sentScore  = SENTIMENT.score;
+  const scoreColor = sentScore>60?"#10b981":sentScore>40?"#f59e0b":"#ef4444";
 
   return (
-    <div style={{padding:"40px 48px",maxWidth:1100,margin:"0 auto"}}>
-      <div className="fade-up" style={{marginBottom:32}}>
-        <h1 style={{fontSize:32,fontWeight:700,letterSpacing:"-0.02em",color:"var(--text0)"}}>AI Agent</h1>
-        <div style={{fontSize:15,color:"var(--text1)",marginTop:6}}>Market intelligence and rebalancing recommendations</div>
+    <div style={{ padding:"40px 48px",maxWidth:1100,margin:"0 auto" }}>
+      <div className="fade-up" style={{ marginBottom:32 }}>
+        <h1 style={{ fontSize:32,fontWeight:700,letterSpacing:"-0.02em" }}>AI Agent</h1>
+        <div style={{ fontSize:15,color:"var(--text1)",marginTop:6 }}>Market intelligence and rebalancing recommendations</div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,marginBottom:28}}>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,marginBottom:28 }}>
         <Card className="fade-up" glow>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
-            <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",fontWeight:600}}>Market Sentiment</div>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
+            <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",fontWeight:600 }}>Market Sentiment</div>
             <Badge label={SENTIMENT.label} color={scoreColor}/>
           </div>
-          <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:20}}>
-            <div style={{fontSize:56,fontWeight:800,fontFamily:"var(--mono)",color:scoreColor,textShadow:`0 0 30px ${scoreColor}`}}>{sentScore}</div>
-            <div style={{fontSize:16,color:"var(--text2)"}}>/ 100</div>
+          <div style={{ display:"flex",alignItems:"baseline",gap:10,marginBottom:20 }}>
+            <div style={{ fontSize:56,fontWeight:800,fontFamily:"var(--mono)",color:scoreColor,textShadow:`0 0 30px ${scoreColor}` }}>{sentScore}</div>
+            <div style={{ fontSize:16,color:"var(--text2)" }}>/ 100</div>
           </div>
-          <div style={{height:8,borderRadius:4,background:"rgba(255,255,255,0.05)",overflow:"hidden",marginBottom:16}}>
-            <div style={{width:`${sentScore}%`,height:"100%",background:`linear-gradient(90deg,${scoreColor}88,${scoreColor})`,borderRadius:4}}/>
+          <div style={{ height:8,borderRadius:4,background:"rgba(255,255,255,0.05)",overflow:"hidden",marginBottom:16 }}>
+            <div style={{ width:`${sentScore}%`,height:"100%",background:`linear-gradient(90deg,${scoreColor}88,${scoreColor})`,borderRadius:4 }}/>
           </div>
-          <div style={{fontSize:14,color:"var(--text1)",lineHeight:1.7,fontWeight:400}}>{SENTIMENT.summary}</div>
-          <div style={{marginTop:14,fontSize:13,color:scoreColor,fontFamily:"var(--mono)",fontWeight:600}}>Confidence: {SENTIMENT.confidence}%</div>
+          <div style={{ fontSize:14,color:"var(--text1)",lineHeight:1.7 }}>{SENTIMENT.summary}</div>
+          <div style={{ marginTop:14,fontSize:13,color:scoreColor,fontFamily:"var(--mono)",fontWeight:600 }}>Confidence: {SENTIMENT.confidence}%</div>
         </Card>
         <Card className="fade-up-2">
-          <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600}}>Protocol Yield Comparison</div>
-          {Object.entries(PROTOCOLS).map(([name, p]) => (
-            <div key={name} style={{marginBottom:18}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                <span style={{fontSize:14,color:p.color,fontWeight:600}}>{name}</span>
-                <span style={{fontSize:14,fontFamily:"var(--mono)",fontWeight:700,color:"var(--text0)"}}>{p.apy}% APY</span>
+          <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600 }}>Protocol Yield Comparison</div>
+          {Object.entries(PROTOCOLS).map(([name,p])=>(
+            <div key={name} style={{ marginBottom:18 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",marginBottom:8 }}>
+                <span style={{ fontSize:14,color:p.color,fontWeight:600 }}>{name}</span>
+                <span style={{ fontSize:14,fontFamily:"var(--mono)",fontWeight:700 }}>{p.apy}% APY</span>
               </div>
-              <div style={{height:8,borderRadius:4,background:"rgba(255,255,255,0.05)",overflow:"hidden"}}>
-                <div style={{width:`${(p.apy/25)*100}%`,height:"100%",background:`linear-gradient(90deg,${p.color}66,${p.color})`,borderRadius:4}}/>
+              <div style={{ height:8,borderRadius:4,background:"rgba(255,255,255,0.05)",overflow:"hidden" }}>
+                <div style={{ width:`${(p.apy/25)*100}%`,height:"100%",background:`linear-gradient(90deg,${p.color}66,${p.color})`,borderRadius:4 }}/>
               </div>
-              <div style={{fontSize:11,color:"var(--text2)",marginTop:6,fontFamily:"var(--mono)"}}>TVL ${p.tvl} · Risk: {p.risk}</div>
+              <div style={{ fontSize:11,color:"var(--text2)",marginTop:6,fontFamily:"var(--mono)" }}>TVL ${p.tvl} · Risk: {p.risk}</div>
             </div>
           ))}
-          <Btn onClick={run} disabled={analyzing} small style={{width:"100%",marginTop:12}}>
+          <Btn onClick={run} disabled={analyzing} small style={{ width:"100%",marginTop:12 }}>
             {analyzing
-              ? <span style={{display:"flex",alignItems:"center",gap:10,justifyContent:"center"}}>
-                  <span style={{width:14,height:14,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"spin 0.8s linear infinite"}}/>
-                  Analyzing...
-                </span>
+              ? <span style={{ display:"flex",alignItems:"center",gap:10,justifyContent:"center" }}><span style={{ width:14,height:14,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"spin 0.8s linear infinite" }}/>Analyzing...</span>
               : "Run AI Analysis ◎"
             }
           </Btn>
         </Card>
       </div>
 
-      {(analyzed || recs.some(r => r.status === "pending")) && (
+      {analyzed && recs.length > 0 && (
         <div>
-          <div style={{fontSize:17,fontWeight:700,marginBottom:20,color:"var(--text0)"}}>Rebalancing Recommendations</div>
-          {recs.map((rec, i) => {
-            const vault = vaults.find(v => v.id === rec.vaultId);
+          <div style={{ fontSize:17,fontWeight:700,marginBottom:20 }}>Rebalancing Recommendations</div>
+          {recs.map((rec,i)=>{
+            const vault     = vaults.find(v=>v.id===rec.vaultId);
             const protocols = Object.keys(PROTOCOLS);
             return (
-              <Card key={rec.id} className={`fade-up-${i+1}`} style={{marginBottom:20}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+              <Card key={rec.id} className={`fade-up-${i+1}`} style={{ marginBottom:20 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16 }}>
                   <div>
-                    <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",marginBottom:6,fontWeight:600}}>VAULT</div>
-                    <div style={{fontWeight:700,fontSize:16,color:"var(--text0)"}}>{vault?.name}</div>
+                    <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",marginBottom:6,fontWeight:600 }}>VAULT</div>
+                    <div style={{ fontWeight:700,fontSize:16 }}>{vault?.name}</div>
                   </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600}}>PROJECTED APY</div>
-                    <div style={{fontSize:28,fontWeight:800,color:"#10b981",fontFamily:"var(--mono)",textShadow:"0 0 20px #10b981"}}>{rec.projectedAPY}%</div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",fontWeight:600 }}>PROJECTED APY</div>
+                    <div style={{ fontSize:28,fontWeight:800,color:"#10b981",fontFamily:"var(--mono)",textShadow:"0 0 20px #10b981" }}>{rec.projectedAPY}%</div>
                   </div>
                 </div>
-                <div style={{fontSize:14,color:"var(--text1)",lineHeight:1.7,marginBottom:20,background:"rgba(255,255,255,0.03)",borderRadius:10,padding:"14px 18px",fontWeight:400}}>{rec.reason}</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20}}>
-                  {["Current","Recommended"].map((label, li) => (
+                <div style={{ fontSize:14,color:"var(--text1)",lineHeight:1.7,marginBottom:20,background:"rgba(255,255,255,0.03)",borderRadius:10,padding:"14px 18px" }}>{rec.reason}</div>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20 }}>
+                  {["Current","Recommended"].map((label,li)=>(
                     <div key={label}>
-                      <div style={{fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",marginBottom:12,fontWeight:600}}>{label.toUpperCase()}</div>
-                      {protocols.map((p, pi) => (
-                        <div key={p} style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                          <span style={{fontSize:13,color:PROTOCOLS[p].color,fontWeight:500}}>{p.split(" ")[0]}</span>
-                          <span style={{fontSize:13,fontFamily:"var(--mono)",fontWeight:600,color:"var(--text0)"}}>{li===0?rec.current[pi]:rec.recommended[pi]}%</span>
+                      <div style={{ fontSize:11,color:"var(--text2)",fontFamily:"var(--mono)",marginBottom:12,fontWeight:600 }}>{label.toUpperCase()}</div>
+                      {protocols.map((p,pi)=>(
+                        <div key={p} style={{ display:"flex",justifyContent:"space-between",marginBottom:8 }}>
+                          <span style={{ fontSize:13,color:PROTOCOLS[p].color,fontWeight:500 }}>{p.split(" ")[0]}</span>
+                          <span style={{ fontSize:13,fontFamily:"var(--mono)",fontWeight:600 }}>{li===0?rec.current[pi]:rec.recommended[pi]}%</span>
                         </div>
                       ))}
                     </div>
                   ))}
                 </div>
-                {rec.status === "pending"
-                  ? <div style={{display:"flex",gap:12}}>
-                      <Btn variant="success" onClick={() => handle(rec.id,"accepted")} small>Accept ✓</Btn>
-                      <Btn variant="danger"  onClick={() => handle(rec.id,"rejected")} small>Reject ✕</Btn>
-                    </div>
+                {rec.status==="pending"
+                  ? <div style={{ display:"flex",gap:12 }}><Btn variant="success" onClick={()=>handle(rec.id,"accepted")} small>Accept ✓</Btn><Btn variant="danger" onClick={()=>handle(rec.id,"rejected")} small>Reject ✕</Btn></div>
                   : <Badge label={rec.status==="accepted"?"✓ Accepted":"✕ Rejected"} color={rec.status==="accepted"?"#10b981":"#ef4444"}/>
                 }
               </Card>
@@ -1016,11 +836,11 @@ const AIAgent = ({vaults, recs, setRecs}) => {
         </div>
       )}
 
-      {!analyzed && !recs.some(r => r.status === "pending") && (
-        <Card style={{textAlign:"center",padding:56}}>
-          <div style={{fontSize:48,marginBottom:20,animation:"float 4s ease-in-out infinite",filter:"drop-shadow(0 0 20px rgba(139,92,246,0.5))"}}>◎</div>
-          <div style={{fontWeight:700,fontSize:18,marginBottom:10,color:"var(--text0)"}}>AI Agent Ready</div>
-          <div style={{fontSize:14,color:"var(--text2)",marginBottom:28,fontWeight:400}}>Run analysis to get personalized rebalancing recommendations</div>
+      {!analyzed && (
+        <Card style={{ textAlign:"center",padding:56 }}>
+          <div style={{ fontSize:48,marginBottom:20,animation:"float 4s ease-in-out infinite",filter:"drop-shadow(0 0 20px rgba(139,92,246,0.5))" }}>◎</div>
+          <div style={{ fontWeight:700,fontSize:18,marginBottom:10 }}>AI Agent Ready</div>
+          <div style={{ fontSize:14,color:"var(--text2)",marginBottom:28 }}>Run analysis to get personalized rebalancing recommendations for all {vaults.length} vaults</div>
           <Btn onClick={run}>Start Analysis</Btn>
         </Card>
       )}
@@ -1032,82 +852,78 @@ const AIAgent = ({vaults, recs, setRecs}) => {
 const Analytics = () => {
   const allHistory   = genHistory(60, 70000, 1.0022);
   const benchHistory = genHistory(60, 70000, 1.0012);
-  const combined = allHistory.map((d, i) => ({...d, benchmark: benchHistory[i].value}));
+  const combined     = allHistory.map((d,i)=>({...d,benchmark:benchHistory[i].value}));
   return (
-    <div style={{padding:"40px 48px",maxWidth:1100,margin:"0 auto"}}>
-      <div className="fade-up" style={{marginBottom:32}}>
-        <h1 style={{fontSize:32,fontWeight:700,letterSpacing:"-0.02em",color:"var(--text0)"}}>Analytics</h1>
-        <div style={{fontSize:15,color:"var(--text1)",marginTop:6}}>Portfolio performance vs benchmark</div>
+    <div style={{ padding:"40px 48px",maxWidth:1100,margin:"0 auto" }}>
+      <div className="fade-up" style={{ marginBottom:32 }}>
+        <h1 style={{ fontSize:32,fontWeight:700,letterSpacing:"-0.02em" }}>Analytics</h1>
+        <div style={{ fontSize:15,color:"var(--text1)",marginTop:6 }}>Portfolio performance vs benchmark</div>
       </div>
-      <Card className="fade-up" style={{marginBottom:24}}>
-        <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600}}>60-day performance vs ETH benchmark</div>
-        <div style={{display:"flex",gap:24,marginBottom:20}}>
-          <span style={{fontSize:13,display:"flex",alignItems:"center",gap:8,color:"var(--text1)"}}>
-            <span style={{width:14,height:3,background:"#8b5cf6",display:"inline-block",borderRadius:2}}/> MAAV Portfolio
-          </span>
-          <span style={{fontSize:13,display:"flex",alignItems:"center",gap:8,color:"var(--text1)"}}>
-            <span style={{width:14,display:"inline-block",borderTop:"2px dashed #64748b"}}/> ETH Benchmark
-          </span>
+      <Card className="fade-up" style={{ marginBottom:24 }}>
+        <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600 }}>60-day performance vs ETH benchmark</div>
+        <div style={{ display:"flex",gap:24,marginBottom:20 }}>
+          <span style={{ fontSize:13,display:"flex",alignItems:"center",gap:8,color:"var(--text1)" }}><span style={{ width:14,height:3,background:"#8b5cf6",display:"inline-block",borderRadius:2 }}/> MAAV Portfolio</span>
+          <span style={{ fontSize:13,display:"flex",alignItems:"center",gap:8,color:"var(--text1)" }}><span style={{ width:14,display:"inline-block",borderTop:"2px dashed #64748b" }}/> ETH Benchmark</span>
         </div>
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={combined}>
-            <XAxis dataKey="date" tick={{fill:"#64748b",fontSize:11,fontFamily:"Space Mono"}} tickLine={false} axisLine={false} interval={8}/>
-            <YAxis tick={{fill:"#64748b",fontSize:11,fontFamily:"Space Mono"}} tickLine={false} axisLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
-            <Tooltip contentStyle={{background:"rgba(16,24,48,0.95)",border:"1px solid rgba(139,92,246,0.3)",borderRadius:10,fontSize:13,fontFamily:"Space Mono",color:"#f8fafc"}} formatter={v=>[`$${Math.round(v).toLocaleString()}`]}/>
+            <XAxis dataKey="date" tick={{ fill:"#64748b",fontSize:11,fontFamily:"Space Mono" }} tickLine={false} axisLine={false} interval={8}/>
+            <YAxis tick={{ fill:"#64748b",fontSize:11,fontFamily:"Space Mono" }} tickLine={false} axisLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
+            <Tooltip contentStyle={{ background:"rgba(16,24,48,0.95)",border:"1px solid rgba(139,92,246,0.3)",borderRadius:10,fontSize:13,fontFamily:"Space Mono",color:"#f8fafc" }} formatter={v=>[`$${Math.round(v).toLocaleString()}`]}/>
             <Line type="monotone" dataKey="value"     stroke="#8b5cf6" strokeWidth={3}   dot={false} name="MAAV"/>
             <Line type="monotone" dataKey="benchmark" stroke="#64748b" strokeWidth={2}   strokeDasharray="5 5" dot={false} name="Benchmark"/>
           </LineChart>
         </ResponsiveContainer>
       </Card>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20}}>
-        <StatCard label="60d Return"    value="+12.4%" sub="vs +7.1% benchmark" accent="#10b981"/>
-        <StatCard label="Alpha Generated" value="+5.3%" sub="Outperformance"   accent="#8b5cf6"/>
-        <StatCard label="Sharpe Ratio"  value="1.84"   sub="Risk-adjusted"     accent="#3b82f6"/>
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20 }}>
+        <StatCard label="60d Return"       value="+12.4%" sub="vs +7.1% benchmark" accent="#10b981"/>
+        <StatCard label="Alpha Generated"  value="+5.3%"  sub="Outperformance"     accent="#8b5cf6"/>
+        <StatCard label="Sharpe Ratio"     value="1.84"   sub="Risk-adjusted"       accent="#3b82f6"/>
       </div>
     </div>
   );
 };
 
 // ── Settings ───────────────────────────────────────────────────────────────
-const SettingsPage = ({user, setAuthed}) => (
-  <div style={{padding:"40px 48px",maxWidth:640,margin:"0 auto"}}>
-    <div className="fade-up" style={{marginBottom:32}}>
-      <h1 style={{fontSize:32,fontWeight:700,letterSpacing:"-0.02em",color:"var(--text0)"}}>Settings</h1>
+const SettingsPage = ({ user, setAuthed }) => (
+  <div style={{ padding:"40px 48px",maxWidth:640,margin:"0 auto" }}>
+    <div className="fade-up" style={{ marginBottom:32 }}>
+      <h1 style={{ fontSize:32,fontWeight:700,letterSpacing:"-0.02em" }}>Settings</h1>
     </div>
-    <Card className="fade-up" style={{marginBottom:24}}>
-      <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600}}>Profile</div>
-      <div style={{display:"flex",alignItems:"center",gap:20,marginBottom:24}}>
-        <div style={{width:60,height:60,borderRadius:"50%",background:"linear-gradient(135deg,#8b5cf6,#3b82f6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:700,boxShadow:"0 4px 20px rgba(139,92,246,0.4)"}}>{user.name[0]}</div>
+    <Card className="fade-up" style={{ marginBottom:24 }}>
+      <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600 }}>Profile</div>
+      <div style={{ display:"flex",alignItems:"center",gap:20,marginBottom:24 }}>
+        <div style={{ width:60,height:60,borderRadius:"50%",background:"linear-gradient(135deg,#8b5cf6,#3b82f6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:700,boxShadow:"0 4px 20px rgba(139,92,246,0.4)" }}>{user.name[0]}</div>
         <div>
-          <div style={{fontWeight:700,fontSize:17,color:"var(--text0)"}}>{user.name}</div>
-          <div style={{fontSize:14,color:"var(--text2)"}}>{user.email}</div>
+          <div style={{ fontWeight:700,fontSize:17 }}>{user.name}</div>
+          <div style={{ fontSize:14,color:"var(--text2)" }}>{user.email}</div>
         </div>
       </div>
       <Input label="Display Name" defaultValue={user.name}/>
       <Input label="Email" defaultValue={user.email}/>
       <Btn>Save Changes</Btn>
     </Card>
-    <Card className="fade-up-2" style={{marginBottom:24}}>
-      <div style={{fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600}}>AI Settings</div>
-      {[["Auto-rebalance threshold","5% deviation"],["Max slippage tolerance","0.5%"],["AI analysis frequency","Every 6 hours"]].map(([k,v]) => (
-        <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",borderBottom:"1px solid rgba(99,120,200,0.1)"}}>
-          <span style={{fontSize:14,color:"var(--text1)",fontWeight:500}}>{k}</span>
-          <span style={{fontSize:14,color:"#8b5cf6",fontFamily:"var(--mono)",fontWeight:600}}>{v}</span>
+    <Card className="fade-up-2" style={{ marginBottom:24 }}>
+      <div style={{ fontSize:12,color:"var(--text2)",fontFamily:"var(--mono)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:20,fontWeight:600 }}>AI Settings</div>
+      {[["Auto-rebalance threshold","5% deviation"],["Max slippage tolerance","0.5%"],["AI analysis frequency","Every 6 hours"]].map(([k,v])=>(
+        <div key={k} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",borderBottom:"1px solid rgba(99,120,200,0.1)" }}>
+          <span style={{ fontSize:14,color:"var(--text1)",fontWeight:500 }}>{k}</span>
+          <span style={{ fontSize:14,color:"#8b5cf6",fontFamily:"var(--mono)",fontWeight:600 }}>{v}</span>
         </div>
       ))}
     </Card>
-    <Btn variant="danger" onClick={() => setAuthed(false)}>Sign Out</Btn>
+    <Btn variant="danger" onClick={()=>setAuthed(false)}>Sign Out</Btn>
   </div>
 );
 
 // ── App Root ───────────────────────────────────────────────────────────────
 export default function App() {
-  const [authed, setAuthed]             = useState(false);
-  const [user, setUser]                 = useState(null);
-  const [page, setPage]                 = useState("Dashboard");
-  const [vaults, setVaults]             = useState(MOCK_VAULTS);
+  const [authed,        setAuthed]        = useState(false);
+  const [user,          setUser]          = useState(null);
+  const [page,          setPage]          = useState("Dashboard");
+  const [vaults,        setVaults]        = useState(MOCK_VAULTS);
   const [selectedVault, setSelectedVault] = useState(null);
-  const [recs, setRecs]                 = useState(MOCK_RECS);
+  const [recs,          setRecs]          = useState(MOCK_RECS);
 
   const renderPage = () => {
     switch (page) {
@@ -1125,14 +941,14 @@ export default function App() {
       <FontLink/>
       <ShaderBackground/>
       <GlobalOverlay/>
-      <div style={{position:"relative",zIndex:10,minHeight:"100vh"}}>
+      <div style={{ position:"relative",zIndex:10,minHeight:"100vh" }}>
         {!authed
-          ? <AuthScreen onLogin={u => { setUser(u); setAuthed(true); }}/>
-          : <div style={{display:"flex",minHeight:"100vh"}}>
-              <Sidebar page={page} setPage={p => { setPage(p); setSelectedVault(null); }} user={user}/>
-              <div style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column"}}>
+          ? <AuthScreen onLogin={u=>{ setUser(u); setAuthed(true); }}/>
+          : <div style={{ display:"flex",minHeight:"100vh" }}>
+              <Sidebar page={page} setPage={p=>{ setPage(p); setSelectedVault(null); }} user={user}/>
+              <div style={{ flex:1,overflow:"auto",display:"flex",flexDirection:"column" }}>
                 <Ticker/>
-                <div style={{flex:1}}>{renderPage()}</div>
+                <div style={{ flex:1 }}>{renderPage()}</div>
               </div>
             </div>
         }
